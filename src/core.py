@@ -12,6 +12,7 @@ from .. import survey_keys
 
 #def download_sg_data():
 #    """ Download SG data from SG server and concatenate to single JSON """
+# test
 
 client = SurveyGizmo(api_version='v5',
                      response_type='json',
