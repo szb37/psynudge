@@ -44,26 +44,6 @@ def downloadSurveyData(surveyID):
 def updateSurveyData(surveyID):
     pass
 
-def convert_ps2dt(dstr):
-    """ Converts date trings from PS data to datetime.datetime objects.
-        Input:
-            dstr: isofromatted date string
-
-        Returns:
-            dt_loc: datetime obj in participant's local timezone
-            dt_utc: datetime obj in UTC timezone
-    """
-
-    assert (len(dstr)==25 or (len(dstr)==20) and dstr[-1]=='Z')
-    assert dstr[4]=='-'
-    assert dstr[7]=='-'
-    assert dstr[10:19]=='T00:00:00'
-
-    dt_loc = dateutil.parser.parse(dstr)
-    dt_utc = dt_loc.astimezone(pytz.timezone('UTC'))
-
-    return dt_loc, dt_utc
-
 def collectNudges(ps_data, timepoints):
 
     assert isinstance(study, list)
@@ -84,7 +64,7 @@ def collectNudges(ps_data, timepoints):
                 continue
 
             # Check whether it is still possible to complete timepoint
-            ustart_loc, ustart_utc = convert_ps2dt(user['date'])
+            ustart_loc, ustart_utc = convert_iso2dt(user['date'])
             start = ustart_utc + td2tp
             end   = ustart_utc + td2nudge
             isNudge = isWithinWindow(start, end)
@@ -94,22 +74,11 @@ def collectNudges(ps_data, timepoints):
 
     return nudges
 
+
+""" PLACEHLDERS """
 def isCompleted(userID, surveyID, sgData):
     """ Checks whether given user has completed given survey """
     pass
-
-def isWithinWindow(start, end):
-    """ Checks whether there is any uncompleted timepoints within the nudginf time window
-        input:
-            start: datetime.datetime of start in UTC
-            end:  datetime.datetime of end in UTC
-    """
-
-    now = datetime.datetime.now()
-    if (start <= now) and (now <= end):
-        return True
-    else:
-        return False
 
 def getResponseSguid(response):
     """ Returns SGUID of a response. The SGUID can be recorded either as hidden or URL variable, code checks both
@@ -143,3 +112,49 @@ def getResponseSguid(response):
         return sguid_hidden
     elif sguid_url is None and sguid_hidden is None:
         raise MissingSGUID()
+
+
+""" TESTED """
+def convert_iso2dt(dstr):
+    """ Converts date trings from PS data to datetime.datetime objects.
+        Input:
+            dstr: isofromatted date string
+
+        Returns:
+            dt_loc: datetime obj in participant's local timezone
+            dt_utc: datetime obj in UTC timezone
+    """
+
+    assert (len(dstr)==25 or (len(dstr)==20) and dstr[-1]=='Z')
+    assert dstr[4]=='-'
+    assert dstr[7]=='-'
+    assert dstr[10:19]=='T00:00:00'
+
+    dt_loc = dateutil.parser.parse(dstr)
+    dt_utc = dt_loc.astimezone(pytz.timezone('UTC'))
+
+    return dt_loc, dt_utc
+
+def isWithinWindow(start, end):
+    """ Checks whether there is any uncompleted timepoints within the nudginf time window
+        input:
+            start: datetime.datetime of start in UTC
+            end:  datetime.datetime of end in UTC
+    """
+
+    # Timezones need to be represented by pytz module
+    assert start.tzname()=='UTC'
+    assert isinstance(start.tzinfo, type(pytz.UTC))
+    assert end.tzname()=='UTC'
+    assert isinstance(end.tzinfo, type(pytz.UTC))
+
+    now = getNowUtc()
+
+    if (start <= now) and (now <= end):
+        return True
+    else:
+        return False
+
+def getNowUtc():
+    """ Wrapper to get current datetime """
+    return datetime.datetime.utcnow().astimezone(pytz.timezone('UTC'))
