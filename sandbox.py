@@ -2,42 +2,57 @@
 :Author: Balazs Szigeti <b.islander@protonmail.com>
 :Copyright: 2020, DrugNerdsLab
 :License: MIT
+
+'ceremony2':[
+    {'tp':None, 'id':'90203577', 'name':'Beads task R/B 1', 'remind':False},
+    {'tp':None, 'id':'90203575', 'name':'Beads task P/Y 1', 'remind':False},
+    {'tp':None, 'id':'90176399', 'name':'Ceremony Study 2.0', 'remind':False},
+    {'tp':None, 'id':'90170989', 'name':'Test pre-post Survey', 'remind':False},
+    {'tp':'endpoint1', 'id':'90159708', 'name':'CStudy 2.0: Endpoint I (1 week)', 'remind':True},
+    {'tp':'pre' , 'id':'90159703', 'name':'CStudy 2.0: Pre-ceremony', 'remind':True},
+    {'tp':'post' , 'id':'90159702', 'name':'CStudy 2.0: Post-ceremony 1', 'remind':True},
+    {'tp':'baseline', 'id':'90159701', 'name':'CStudy 2.0: Baseline', 'remind':True},
+    ],
+
 """
 
+https://survey.alchemer.eu/s3/90286853/Piping2?sguid=011&name=tester&__sgtarget=1
+
+#Response A
+https://survey.alchemer.eu/s3/90286853/Piping2?sguid=012&name=tester&__sgtarget=1
+https://survey.alchemer.eu/s3/90286853/Piping2?sguid=012&name=tester&__sgtarget=5
+
+#Response B
+https://survey.alchemer.eu/s3/90286853/Piping2?sguid=013&name=tester&__sgtarget=1
+https://survey.alchemer.eu/s3/90286853/Piping2?sguid=013&name=tester&__sgtarget=5
+
+
+""" DOWNLAOD DATA OF GIVEN SURVEY """
 from surveygizmo import SurveyGizmo
 from psynudge import tokens
+import json
 
 client = SurveyGizmo(api_version='v5',
                      response_type='json',
                      api_token = tokens.api_key,
                      api_token_secret = tokens.secret_key)
 
-id = 90076350
+client.config.base_url = 'https://restapi.surveygizmo.eu/'
 
-with open('ceremony.json', 'w') as outfile:
-    json.dump(sg, outfile)
+id = 90288073
 
+temp = client.api.surveyresponse.resultsperpage(value=100000).list(id)
+assert isinstance(temp, str)
+data = json.loads(temp)
 
+with open('test_data.json', 'w+') as outfile:
+    json.dump(data, outfile)
 
-item_match=[]
-question='email'
-question_in_bold='EMAIL'
+""" filter sponses """
+client.api.surveyresponse.filter(field='date_submitted', operator='<', value='2020-10-27 14:14:32 GMT').resultsperpage(value=100000).list(id)
 
-for item in response:
-    assert 'question' in response[item].keys()
-    if (response[item]['question']==question) or (response[item]['question']==question_in_bold):
-        item_match.append(response[item])
+https://restapi.alchemer.com/v5/survey/123456/surveyresponse?filter[field][0]=
 
-if len(item_match)==0:
-    raise QuestionNotFound()
-assert len(item_match)==1 # Each question should be featured once
+date_submitted&filter[operator][0]=>=&filter[value][0]=2011-02-23+13:23:28
 
-assert 'shown' in item_match[0].keys()
-if item_match[0]['shown'] is False:
-    raise QuestionFoundButNotShown()
-else:
-    return item_match[0]
-
-
-
- dateutil.parser.parse('2020-01-10T00:00:00Z')
+date_submitted>'2011-02-23+13:23:28'

@@ -4,6 +4,7 @@
 :License: MIT
 """
 
+from psynudge.src.studies import *
 from surveygizmo import SurveyGizmo
 import dateutil.parser
 import datetime
@@ -11,40 +12,56 @@ import pytz
 import json
 import collections
 from .. import tokens
-from psynudge.src.studies import studies
+import logging
+import os
 
-Nudge = collections.namedtuple('Nudge', 'userID, surveyID')
+src_folder     = os.path.dirname(os.path.abspath(__file__))
+project_folder = os.path.abspath(os.path.join(src_folder, os.pardir))
 
-def downloadSurveyData(surveyID):
-    """ Download SG data from SG server and concatenate to single JSON """
+log_path = os.path.join(project_folder, "psynudge.log")
+logging.basicConfig(
+    level=logging.DEBUG, filename=log_path, datefmt='%Y-%m-%d - %H:%M:%S', filemode='a', format='%(asctime)s - %(levelname)s - %(message)s')
+logging.info('Core imported.')
 
-    client = SurveyGizmo(api_version='v5',
-                         response_type='json',
-                         api_token = tokens.api_key,
-                         api_token_secret = tokens.secret_key)
+for study in studies:
+    assert study.areTpsConsistent()
 
-    client.config.base_url = 'https://restapi.surveygizmo.eu/'
+Nudge = collections.namedtuple('Nudge', 'userID, surveyId')
 
-    for study, surveys in survey_keys.studies.items():
-        for survey in surveys:
+def run(studies):
 
-            if survey['remind'] is False:
-                #continue
-                pass
+    for study in studies:
+        if study.isActive is False:
+            continue
 
-            id = survey['id']
+        ps_data = get_ps_data(study)
 
-            temp = client.api.surveyresponse.resultsperpage(value=100000).list(id)
-            assert isinstance(temp, str)
+        for timepoint in study.timepoints:
+            nudges = collect_nudges(ps_data, timepoint)
+            send_nudges(nudges)
 
-            sg = json.loads(temp)
+def write_last_check_time(project_folder=project_folder):
+    """ Updates last_time_checked.txt, which contains the isostring datetime for the last time the nuddger was run (in UTC) """
 
-            assert sg['total_pages']==1
+    file_path = os.path.join(project_folder, 'last_time_checked.txt')
+    f = open(file_path, 'w')
+    now = datetime.datetime.now().replace(microsecond=0).astimezone(pytz.timezone('UTC'))
+    f.write(now.isoformat())
+    f.close()
+    logging.info('last_time_checked.txt updated.')
 
-def updateSurveyData(surveyID):
-    pass
+def read_last_check_time(project_folder=project_folder):
+    """ Reads and returns last_time_checked.txt, which contains the isostring datetime for the last time the nuddger was run (in UTC) """
 
-def collectNudges(ps_data, timepoints):
+    file_path = os.path.join(project_folder, 'last_time_checked.txt')
+    f = open(file_path, 'r')
+    now_str = f.readline()
+    assert len(now_str==25)
+    f.close()
+    logging.info('last_time_checked.txt read.')
+    return now_str
+
+def collect_nudges(ps_data, timepoints):
 
     assert isinstance(study, list)
     assert all([isinstance(element, Timepoint) for element in study])
@@ -55,28 +72,59 @@ def collectNudges(ps_data, timepoints):
 
     for user in ps_data:
         userID = user['key']
+        ustart_loc, ustart_utc = convert_iso2dt(user['date'])
 
         for timepoint in timepoints:
-            surveyID = timepoint.surveyID
+            surveyId = timepoint.surveyId
+
+            needCompleted = needCompleted(userId, surveyId)
             isCompleted = isCompleted(userId, surveyId)
 
             if isCompleted is True:
                 continue
 
             # Check whether it is still possible to complete timepoint
-            ustart_loc, ustart_utc = convert_iso2dt(user['date'])
             start = ustart_utc + td2tp
             end   = ustart_utc + td2nudge
             isNudge = isWithinWindow(start, end)
 
             if isNudge is True:
-                nudges.append(Nudge(userID, surveyID))
+                nudges.append(Nudge(userID, surveyId))
 
     return nudges
 
+def downloadSurveyData(study, project_folder=project_folder):
+    """ Download SG data from SG server and concatenate to single JSON """
 
-""" PLACEHLDERS """
-def isCompleted(userID, surveyID, sgData):
+    client = SurveyGizmo(api_version='v5',
+                         response_type='json',
+                         api_token = tokens.api_key,
+                         api_token_secret = tokens.secret_key)
+    client.config.base_url = 'https://restapi.surveygizmo.eu/'
+    tps = list(set(study.tps))
+
+    for tp in tps:
+
+        temp = client.api.surveyresponse.resultsperpage(value=100000).list(tp.surveyId)
+        assert isinstance(temp, str)
+
+        sg_data = json.loads(temp)
+        assert sg_data['total_pages']==1
+        assert sg_data['result_ok'] is True
+
+        if study.type=='stacked':
+            outfile=os.path.join(project_folder, "data/{}_{}.json".format(study.name, 'all'))
+
+        if study.type=='indep':
+            outfile=os.path.join(project_folder, "data/{}_{}.json".format(study.name, tp.name))
+
+        with open(outfile, 'w+') as outfile:
+            json.dump(sg_data['data'], outfile)
+
+
+""" PLACEHOLDERS """
+
+def isCompleted(userID, surveyId, sgData):
     """ Checks whether given user has completed given survey """
     pass
 
@@ -113,6 +161,9 @@ def getResponseSguid(response):
     elif sguid_url is None and sguid_hidden is None:
         raise MissingSGUID()
 
+def updateSurveyData(surveyId):
+    pass
+
 
 """ TESTED """
 def convert_iso2dt(dstr):
@@ -136,10 +187,10 @@ def convert_iso2dt(dstr):
     return dt_loc, dt_utc
 
 def isWithinWindow(start, end):
-    """ Checks whether there is any uncompleted timepoints within the nudginf time window
+    """ Checks whether now is between start and end
         input:
             start: datetime.datetime of start in UTC
-            end:  datetime.datetime of end in UTC
+            end:   datetime.datetime of end in UTC
     """
 
     # Timezones need to be represented by pytz module
