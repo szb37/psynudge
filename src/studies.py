@@ -70,8 +70,8 @@ class Timepoint():
         self.start_page = start_page
         self.end_qid = end_qid
 
-indep_test = Study(
-    name='stack_test',
+indep_test_study = Study(
+    name='indep_test',
     type='indep',
     tps = [
         Timepoint(name='tp1', surveyId='90288073', td2tp=td(days=0), td2nudge=td(days=1)),
@@ -79,8 +79,8 @@ indep_test = Study(
     ]
 )
 
-stacked_test = Study(
-    name='indep_test',
+stacked_test_study = Study(
+    name='stacked_test',
     type='stacked',
     tps = [
         Timepoint(name='tp1', surveyId='90286853', td2tp=td(days=0), td2nudge=td(days=1), end_qid=2, start_page=1),
@@ -88,4 +88,4 @@ stacked_test = Study(
     ]
 )
 
-studies=[indep_test, stacked_test]
+studies_list=[indep_test_study, stacked_test_study]

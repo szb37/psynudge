@@ -4,13 +4,17 @@
 :License: MIT
 """
 
-import unittest
-from unittest import mock
-import datetime
-import dateutil.parser
-import psynudge
-import pytz
 
+from unittest import mock
+import dateutil.parser
+import datetime
+import psynudge
+import unittest
+import pytz
+import json
+import os
+
+test_dir = os.path.dirname(os.path.abspath(__file__))
 
 class CoreTestSuit(unittest.TestCase):
 
@@ -70,3 +74,46 @@ class CoreTestSuit(unittest.TestCase):
         end =   dateutil.parser.parse("2020-01-11T00:00:00Z")
         with self.assertRaises(AssertionError):
             self.assertTrue(psynudge.core.isWithinWindow(start, end))
+
+    def test_appendData(self, test_dir=test_dir):
+
+        # Create test file
+        test_data = [1,2,3]
+        file_path = os.path.join(test_dir, 'fixtures/appendDataTest.json')
+        with open(file_path, 'w+') as file:
+            json.dump(test_data, file)
+
+        with open(file_path, 'r') as file:
+            file_data = json.load(file)
+        self.assertEqual(file_data, [1,2,3])
+
+        # Append to file
+        psynudge.core.appendData(file_path, [4,5])
+
+        with open(file_path, 'r') as file:
+            file_data = json.load(file)
+        self.assertEqual(file_data, [1,2,3,4,5])
+
+    def test_getDataFileName(self):
+
+        data_dir = os.path.join(psynudge.core.base_dir, 'data')
+
+        self.assertEqual(
+            psynudge.core.getDataFileName(psynudge.indep_test_study, psynudge.indep_test_study.tps[0]),
+            os.path.join(data_dir, 'indep_test_tp1.json')
+        )
+
+        self.assertEqual(
+            psynudge.core.getDataFileName(psynudge.indep_test_study, psynudge.indep_test_study.tps[1]),
+            os.path.join(data_dir, 'indep_test_tp2.json')
+        )
+
+        self.assertEqual(
+            psynudge.core.getDataFileName(psynudge.stacked_test_study, psynudge.stacked_test_study.tps[0]),
+            os.path.join(data_dir, 'stacked_test_stacked.json')
+        )
+
+        self.assertEqual(
+            psynudge.core.getDataFileName(psynudge.stacked_test_study, psynudge.stacked_test_study.tps[1]),
+            os.path.join(data_dir, 'stacked_test_stacked.json')
+        )

@@ -16,14 +16,14 @@ import logging
 import os
 
 src_folder     = os.path.dirname(os.path.abspath(__file__))
-project_folder = os.path.abspath(os.path.join(src_folder, os.pardir))
+base_dir = os.path.abspath(os.path.join(src_folder, os.pardir))
 
-log_path = os.path.join(project_folder, "psynudge.log")
+log_path = os.path.join(base_dir, "psynudge.log")
 logging.basicConfig(
     level=logging.DEBUG, filename=log_path, datefmt='%Y-%m-%d - %H:%M:%S', filemode='a', format='%(asctime)s - %(levelname)s - %(message)s')
 logging.info('Core imported.')
 
-for study in studies:
+for study in studies_list:
     assert study.areTpsConsistent()
 
 Nudge = collections.namedtuple('Nudge', 'userID, surveyId')
@@ -40,61 +40,13 @@ def run(studies):
             nudges = collect_nudges(ps_data, timepoint)
             send_nudges(nudges)
 
-def write_last_check_time(project_folder=project_folder):
-    """ Updates last_time_checked.txt, which contains the isostring datetime for the last time the nuddger was run (in UTC) """
+def getData(study, forceNew=False, lastCheck=None, base_dir=base_dir):
+    """ Download SG data save """
 
-    file_path = os.path.join(project_folder, 'last_time_checked.txt')
-    f = open(file_path, 'w')
-    now = datetime.datetime.now().replace(microsecond=0).astimezone(pytz.timezone('UTC'))
-    f.write(now.isoformat())
-    f.close()
-    logging.info('last_time_checked.txt updated.')
-
-def read_last_check_time(project_folder=project_folder):
-    """ Reads and returns last_time_checked.txt, which contains the isostring datetime for the last time the nuddger was run (in UTC) """
-
-    file_path = os.path.join(project_folder, 'last_time_checked.txt')
-    f = open(file_path, 'r')
-    now_str = f.readline()
-    assert len(now_str==25)
-    f.close()
-    logging.info('last_time_checked.txt read.')
-    return now_str
-
-def collect_nudges(ps_data, timepoints):
-
-    assert isinstance(study, list)
-    assert all([isinstance(element, Timepoint) for element in study])
-    assert isinstance(ps_data, list)
-    assert all([isinstance(element, dict) for element in ps_data]) #Check keys?
-
-    nudges=[]
-
-    for user in ps_data:
-        userID = user['key']
-        ustart_loc, ustart_utc = convert_iso2dt(user['date'])
-
-        for timepoint in timepoints:
-            surveyId = timepoint.surveyId
-
-            needCompleted = needCompleted(userId, surveyId)
-            isCompleted = isCompleted(userId, surveyId)
-
-            if isCompleted is True:
-                continue
-
-            # Check whether it is still possible to complete timepoint
-            start = ustart_utc + td2tp
-            end   = ustart_utc + td2nudge
-            isNudge = isWithinWindow(start, end)
-
-            if isNudge is True:
-                nudges.append(Nudge(userID, surveyId))
-
-    return nudges
-
-def downloadSurveyData(study, project_folder=project_folder):
-    """ Download SG data from SG server and concatenate to single JSON """
+    assert isinstance(forceNew, bool)
+    assert (lastCheck is None) or isinstance(last_check, str)
+    if forceNew is True:
+        assert lastCheck is None
 
     client = SurveyGizmo(api_version='v5',
                          response_type='json',
@@ -105,25 +57,56 @@ def downloadSurveyData(study, project_folder=project_folder):
 
     for tp in tps:
 
-        temp = client.api.surveyresponse.resultsperpage(value=100000).list(tp.surveyId)
+        if (lastCheck is None) or (forceNew is True):
+            temp = client.api.surveyresponse.resultsperpage(value=100000).list(tp.surveyId)
+        else:
+            temp = client.api.surveyresponse.filter(
+                field    = 'date_submitted',
+                operator = '<',
+                value    = last_check).resultsperpage(value=100000).list(tp.surveyId)
+
         assert isinstance(temp, str)
 
         sg_data = json.loads(temp)
         assert sg_data['total_pages']==1
         assert sg_data['result_ok'] is True
 
+        file_path = getDataFileName(study, tp)
+
+        # Either save new file or append to existing file
+        if os.path.isfile(file_path) is True:
+            appendData(file_path, sg_data['data'])
+
+        if os.path.isfile(file_path) is False:
+            with open(file_path, 'w+') as file:
+                json.dump(sg_data['data'], file)
+
         if study.type=='stacked':
-            outfile=os.path.join(project_folder, "data/{}_{}.json".format(study.name, 'all'))
+            return # no need to iterate over tps with stacked studies
 
-        if study.type=='indep':
-            outfile=os.path.join(project_folder, "data/{}_{}.json".format(study.name, tp.name))
+def write_last_check_time(base_dir=base_dir):
+    """ Updates last_time_checked.txt, which contains the isostring datetime for the last time the nuddger was run (in UTC) """
 
-        with open(outfile, 'w+') as outfile:
-            json.dump(sg_data['data'], outfile)
+    file_path = os.path.join(base_dir, 'last_time_checked.txt')
+    f = open(file_path, 'w')
+    now = datetime.datetime.now().replace(microsecond=0).astimezone(pytz.timezone('UTC'))
+    f.write(now.isoformat())
+    f.close()
+    logging.info('last_time_checked.txt updated.')
+
+def read_last_check_time(base_dir=base_dir):
+    """ Reads and returns last_time_checked.txt, which contains the isostring datetime for the last time the nuddger was run (in UTC) """
+
+    file_path = os.path.join(base_dir, 'last_time_checked.txt')
+    f = open(file_path, 'r')
+    now_str = f.readline()
+    assert len(now_str==25)
+    f.close()
+    logging.info('last_time_checked.txt read.')
+    return now_str
 
 
 """ PLACEHOLDERS """
-
 def isCompleted(userID, surveyId, sgData):
     """ Checks whether given user has completed given survey """
     pass
@@ -161,11 +144,62 @@ def getResponseSguid(response):
     elif sguid_url is None and sguid_hidden is None:
         raise MissingSGUID()
 
-def updateSurveyData(surveyId):
-    pass
+def collect_nudges(ps_data, timepoints):
+
+    assert isinstance(study, list)
+    assert all([isinstance(element, Timepoint) for element in study])
+    assert isinstance(ps_data, list)
+    assert all([isinstance(element, dict) for element in ps_data]) #Check keys?
+
+    nudges=[]
+
+    for user in ps_data:
+        userID = user['key']
+        ustart_loc, ustart_utc = convert_iso2dt(user['date'])
+
+        for timepoint in timepoints:
+            surveyId = timepoint.surveyId
+
+            needCompleted = needCompleted(userId, surveyId)
+            isCompleted = isCompleted(userId, surveyId)
+
+            if isCompleted is True:
+                continue
+
+            # Check whether it is still possible to complete timepoint
+            start = ustart_utc + td2tp
+            end   = ustart_utc + td2nudge
+            isNudge = isWithinWindow(start, end)
+
+            if isNudge is True:
+                nudges.append(Nudge(userID, surveyId))
+
+    return nudges
 
 
 """ TESTED """
+def appendData(file_path, data):
+
+    assert isinstance(data, list)
+
+    with open(file_path, 'r') as file:
+        file_data = json.load(file)
+        assert isinstance(file_data, list)
+
+    for element in data:
+        file_data.append(element)
+
+    with open(file_path, 'w+') as file:
+        json.dump(file_data, file)
+
+def getDataFileName(study, tp, base_dir=base_dir):
+
+    if study.type=='stacked':
+        return os.path.join(base_dir, "data/{}_{}.json".format(study.name, 'stacked'))
+
+    if study.type=='indep':
+        return os.path.join(base_dir, "data/{}_{}.json".format(study.name, tp.name))
+
 def convert_iso2dt(dstr):
     """ Converts date trings from PS data to datetime.datetime objects.
         Input:
