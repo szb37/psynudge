@@ -6,17 +6,16 @@
 
 from psynudge.src.studies import *
 from surveygizmo import SurveyGizmo
+from .. import tokens
 import dateutil.parser
 import datetime
+import logging
 import pytz
 import json
-import collections
-from .. import tokens
-import logging
 import os
 
-src_folder     = os.path.dirname(os.path.abspath(__file__))
-base_dir = os.path.abspath(os.path.join(src_folder, os.pardir))
+src_folder = os.path.dirname(os.path.abspath(__file__))
+base_dir   = os.path.abspath(os.path.join(src_folder, os.pardir))
 
 log_path = os.path.join(base_dir, "psynudge.log")
 logging.basicConfig(
@@ -26,7 +25,7 @@ logging.info('Core imported.')
 for study in studies_list:
     assert study.areTpsConsistent()
 
-Nudge = collections.namedtuple('Nudge', 'userID, surveyId')
+#Nudge = collections.namedtuple('Nudge', 'userID, surveyId')
 
 def run(studies):
 
@@ -35,6 +34,7 @@ def run(studies):
             continue
 
         ps_data = get_ps_data(study)
+        getData(study=study, lastCheck=None)
 
         for timepoint in study.timepoints:
             nudges = collect_nudges(ps_data, timepoint)
@@ -81,27 +81,26 @@ def getData(study, forceNew=False, lastCheck=None, base_dir=base_dir):
             with open(file_path, 'w+') as file:
                 json.dump(sg_data['data'], file)
 
+        # no need to iterate over tps with stacked studies
         if study.type=='stacked':
-            return # no need to iterate over tps with stacked studies
+            return
 
-def write_last_check_time(base_dir=base_dir):
+def writeLastCheckTime(base_dir=base_dir):
     """ Updates last_time_checked.txt, which contains the isostring datetime for the last time the nuddger was run (in UTC) """
 
+    now = getNowUtc()
     file_path = os.path.join(base_dir, 'last_time_checked.txt')
-    f = open(file_path, 'w')
-    now = datetime.datetime.now().replace(microsecond=0).astimezone(pytz.timezone('UTC'))
-    f.write(now.isoformat())
-    f.close()
+    with open(file_path, 'w+') as file:
+        file.write(now.isoformat())
     logging.info('last_time_checked.txt updated.')
 
-def read_last_check_time(base_dir=base_dir):
+def readLastCheckTime(base_dir=base_dir):
     """ Reads and returns last_time_checked.txt, which contains the isostring datetime for the last time the nuddger was run (in UTC) """
 
     file_path = os.path.join(base_dir, 'last_time_checked.txt')
-    f = open(file_path, 'r')
-    now_str = f.readline()
-    assert len(now_str==25)
-    f.close()
+    with open(file_path, 'r') as file:
+        now_str = file.readline()
+    assert len(now_str)==25
     logging.info('last_time_checked.txt read.')
     return now_str
 
@@ -242,4 +241,5 @@ def isWithinWindow(start, end):
 
 def getNowUtc():
     """ Wrapper to get current datetime """
-    return datetime.datetime.utcnow().astimezone(pytz.timezone('UTC'))
+    #return datetime.datetime.utcnow().astimezone(pytz.timezone('UTC'))
+    return datetime.datetime.now().replace(microsecond=0).astimezone(pytz.timezone('UTC'))

@@ -117,3 +117,22 @@ class CoreTestSuit(unittest.TestCase):
             psynudge.core.getDataFileName(psynudge.stacked_test_study, psynudge.stacked_test_study.tps[1]),
             os.path.join(data_dir, 'stacked_test_stacked.json')
         )
+
+    @mock.patch('psynudge.src.core.getNowUtc')
+    def test_readWriteLastTimeCheck(self, mock):
+
+        mock.return_value = dateutil.parser.parse("2020-01-10T00:00:00Z").astimezone(pytz.timezone('UTC'))
+        psynudge.core.writeLastCheckTime()
+        lastTimeStr = psynudge.core.readLastCheckTime()
+        self.assertEqual(lastTimeStr, '2020-01-10T00:00:00+00:00')
+        self.assertEqual(
+            dateutil.parser.parse("2020-01-10T00:00:00Z").astimezone(pytz.timezone('UTC')),
+            dateutil.parser.parse(lastTimeStr))
+
+        mock.return_value = dateutil.parser.parse("3020-01-10T06:07:55Z").astimezone(pytz.timezone('UTC'))
+        psynudge.core.writeLastCheckTime()
+        lastTimeStr = psynudge.core.readLastCheckTime()
+        self.assertEqual(lastTimeStr, '3020-01-10T06:07:55+00:00')
+        self.assertEqual(
+            dateutil.parser.parse("3020-01-10T06:07:55Z").astimezone(pytz.timezone('UTC')),
+            dateutil.parser.parse(lastTimeStr))
