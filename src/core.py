@@ -2,11 +2,13 @@
 :Author: Balazs Szigeti <b.islander@protonmail.com>
 :Copyright: 2020, DrugNerdsLab
 :License: MIT
+
+Currently does not nudge for partial completions
 """
 
-from psynudge.src.studies import *
 from surveygizmo import SurveyGizmo
-from .. import tokens
+from .tokens import api_key, secret_key
+from .studies import *
 import dateutil.parser
 import datetime
 import logging
@@ -14,32 +16,174 @@ import pytz
 import json
 import os
 
+
 src_folder = os.path.dirname(os.path.abspath(__file__))
 base_dir   = os.path.abspath(os.path.join(src_folder, os.pardir))
 
 log_path = os.path.join(base_dir, "psynudge.log")
 logging.basicConfig(
-    level=logging.DEBUG, filename=log_path, datefmt='%Y-%m-%d - %H:%M:%S', filemode='a', format='%(asctime)s - %(levelname)s - %(message)s')
-logging.info('Core imported.')
+    level=logging.INFO,
+    filename=log_path,
+    datefmt='%Y-%m-%d - %H:%M:%S',
+    filemode='a',
+    format='%(asctime)s - %(levelname)s - %(message)s')
+nudgelog = logging.getLogger("nudgelog")
+nudgelog.info('Core imported.')
 
-for study in studies_list:
-    assert study.areTpsConsistent()
 
-#Nudge = collections.namedtuple('Nudge', 'userID, surveyId')
-
-def run(studies):
+def run_nudges(studies):
 
     for study in studies:
         if study.isActive is False:
             continue
 
-        ps_data = get_ps_data(study)
-        getData(study=study, lastCheck=None)
+        psData, surveyData = loadStudyData(study)
 
-        for timepoint in study.timepoints:
-            nudges = collect_nudges(ps_data, timepoint)
-            send_nudges(nudges)
+        for user in psData:
+            userId = user['key']
+            dtStartLoc = iso2dt(user['date'])   # Start datetime in user's local tz
+            dtStartUTC = dt2UTC(dtStartLOC)     # Start datetime in UTC
 
+            for tp in study.timepoints:
+                nudges = isNudge(userId, dtStartUTC, tp, surveyData)
+
+""" Miscs """
+def isNudge(userId, dtStartUTC, tp, surveyData): # Tested
+    """ Returns True if tp is witin nudge time window and tp has not been completed yet, False otherwise """
+    assert isinstance(userId, str)
+    assert isinstance(dtStartUTC, datetime.datetime)
+    assert isinstance(tp, Timepoint)
+    assert isinstance(surveyData, list)
+
+    isWithinNW = isWithinNudgeWindow(dtStartUTC, tp)
+    if isWithinNW is False:
+        return False
+
+    isComp = isCompleted(userId, surveyData)
+    if isComp is True:
+        return False
+
+    return True
+
+def isWithinNudgeWindow(dtStartUTC, tp): # Tested
+    """ Checks if now is within nudge time window of user and tp """
+    assert isinstance(tp, Timepoint)
+    assert isinstance(dtStartUTC, datetime.datetime)
+
+    start = dtStartUTC + (tp.td2start + tp.td2end)
+    end   = dtStartUTC + (tp.td2start + tp.td2end + tp.td2nudge)
+    return isWithinWindow(start, end)
+
+
+""" Survey data exploration """
+def isCompleted(userId, surveyData, firstQID=None, lastQID=None): # Tested
+    """ Checks whether user has entry in surveyData """
+
+    assert isinstance(userId, str)
+    assert isinstance(surveyData, list)
+    assert isinstance(firstQID, int)
+    assert isinstance(lastQID, int)
+
+    responseFound = False
+    for response in surveyData:
+        sguid=getResponseSguid(response)
+        if sguid==userId:
+            responseFound = True
+            break
+
+    if responseFound is False:
+        return False # Response with SGUID not found
+
+    isStarted  = 'answer' in response['survey_data'][str(firstQID)].keys() # answer key exists iff answer was given
+    isFinished = 'answer' in response['survey_data'][str(lastQID)].keys()
+
+    if (isStarted is False) and (isFinished is False):
+        return False
+    if (isStarted is True) and (isFinished is False):
+        return False
+    if (isStarted is False) and (isFinished is True):
+        assert False
+    if (isStarted is True) and (isFinished is True):
+        return True
+
+    assert False
+
+def getResponseSguid(response):
+    """ Returns SGUID of a response. The SGUID can be recorded either as hidden or URL variable, code checks both """
+
+    sguid_url    = None
+    sguid_hidden = None
+
+    for key, value in response['survey_data'].items():
+        if value['question']=='Capture SGUID':
+            sguid_hidden = value['answer']
+
+    try:
+        sguid_url = response['url_variables']['sguid']['value']
+    except:
+        pass
+
+    if isinstance(sguid_url, str) and isinstance(sguid_hidden, str):
+        assert(sguid_url==sguid_hidden)
+        return sguid_url
+    elif isinstance(sguid_url, str) and sguid_hidden is None:
+        return sguid_url
+    elif sguid_url is None and isinstance(sguid_hidden, str):
+        return sguid_hidden
+    elif sguid_url is None and sguid_hidden is None:
+        assert False
+
+
+""" Datetime manipulations """
+def iso2dt(dstr): # Tested
+    """ Converts ISO date string to datetime.datetime obj """
+
+    assert (len(dstr)==25 or (len(dstr)==20) and dstr[-1]=='Z')
+    assert dstr[4]=='-'
+    assert dstr[7]=='-'
+    assert dstr[10:19]=='T00:00:00'
+
+    dt_loc = dateutil.parser.parse(dstr)
+    dt_utc = dt_loc.astimezone(pytz.timezone('UTC'))
+
+    return dt_loc, dt_utc
+
+def dt2iso(dt): # Wrapper
+    """ Wrapper to convert ISO date string to datetime.datetime obj """
+    assert isinstance(dt, datetime.datetime)
+    return dateutil.parser.parse(dstr)
+
+def dt2UTC(dt): # Wrapper
+    """ Wrapper to convert datetime.datetime obj to utc timezone"""
+    assert isinstance(dt, datetime.datetime)
+    return dt.astimezone(pytz.timezone('UTC'))
+
+def getUTCnow(): # Wrapper
+    """ Wrapper to get current datetime """
+    return datetime.datetime.utcnow().replace(microsecond=0).astimezone(pytz.timezone('UTC'))
+
+def isWithinWindow(start, end): # Tested
+    """ Checks whether now is between start and end
+        input:
+            start: datetime.datetime of start in UTC
+            end:   datetime.datetime of end in UTC
+    """
+
+    # Timezones need to be represented by pytz module
+    assert start.tzname()=='UTC'
+    assert isinstance(start.tzinfo, type(pytz.UTC))
+    assert end.tzname()=='UTC'
+    assert isinstance(end.tzinfo, type(pytz.UTC))
+
+    now = getUTCnow()
+
+    if (start <= now) and (now <= end):
+        return True
+    else:
+        return False
+
+
+"""  Disk data manipulations """
 def getData(study, forceNew=False, lastCheck=None, base_dir=base_dir):
     """ Download SG data save """
 
@@ -50,8 +194,8 @@ def getData(study, forceNew=False, lastCheck=None, base_dir=base_dir):
 
     client = SurveyGizmo(api_version='v5',
                          response_type='json',
-                         api_token = tokens.api_key,
-                         api_token_secret = tokens.secret_key)
+                         api_token = api_key,
+                         api_token_secret = secret_key)
     client.config.base_url = 'https://restapi.surveygizmo.eu/'
     tps = list(set(study.tps))
 
@@ -70,6 +214,7 @@ def getData(study, forceNew=False, lastCheck=None, base_dir=base_dir):
         sg_data = json.loads(temp)
         assert sg_data['total_pages']==1
         assert sg_data['result_ok'] is True
+        nudgelog.info('Data successfully acquired form SG.')
 
         file_path = getDataFileName(study, tp)
 
@@ -85,99 +230,14 @@ def getData(study, forceNew=False, lastCheck=None, base_dir=base_dir):
         if study.type=='stacked':
             return
 
-def writeLastCheckTime(base_dir=base_dir):
-    """ Updates last_time_checked.txt, which contains the isostring datetime for the last time the nuddger was run (in UTC) """
+def loadStudyData(study): # WIP
+    psData = get_ps_data(study)
+    getData(study=study, lastCheck=None)
+    surveyData = read_sg_data()
 
-    now = getNowUtc()
-    file_path = os.path.join(base_dir, 'last_time_checked.txt')
-    with open(file_path, 'w+') as file:
-        file.write(now.isoformat())
-    logging.info('last_time_checked.txt updated.')
+    return psData, surveyData
 
-def readLastCheckTime(base_dir=base_dir):
-    """ Reads and returns last_time_checked.txt, which contains the isostring datetime for the last time the nuddger was run (in UTC) """
-
-    file_path = os.path.join(base_dir, 'last_time_checked.txt')
-    with open(file_path, 'r') as file:
-        now_str = file.readline()
-    assert len(now_str)==25
-    logging.info('last_time_checked.txt read.')
-    return now_str
-
-
-""" PLACEHOLDERS """
-def isCompleted(userID, surveyId, sgData):
-    """ Checks whether given user has completed given survey """
-    pass
-
-def getResponseSguid(response):
-    """ Returns SGUID of a response. The SGUID can be recorded either as hidden or URL variable, code checks both
-
-        Input:
-            response: element of SG_DATA[survey_name]['data']
-        Returns:
-            SGUID: sguid of response (same as userID)
-    """
-
-    sguid_url    = None
-    sguid_hidden = None
-
-    try:
-        query = SgMiner.get_question(response['survey_data'], 'sguid')
-        sguid_hidden = query['answer']
-    except (QuestionNotFound, QuestionFoundButNotShown, KeyError):
-        pass
-
-    try:
-        sguid_url = response['url_variables']['sguid']['value']
-    except:
-        pass
-
-    if isinstance(sguid_url, str) and isinstance(sguid_hidden, str):
-        assert(sguid_url==sguid_hidden) # Both SGUID sources found, but they disagree
-        return sguid_url
-    elif isinstance(sguid_url, str) and sguid_hidden is None:
-        return sguid_url
-    elif sguid_url is None and isinstance(sguid_hidden, str):
-        return sguid_hidden
-    elif sguid_url is None and sguid_hidden is None:
-        raise MissingSGUID()
-
-def collect_nudges(ps_data, timepoints):
-
-    assert isinstance(study, list)
-    assert all([isinstance(element, Timepoint) for element in study])
-    assert isinstance(ps_data, list)
-    assert all([isinstance(element, dict) for element in ps_data]) #Check keys?
-
-    nudges=[]
-
-    for user in ps_data:
-        userID = user['key']
-        ustart_loc, ustart_utc = convert_iso2dt(user['date'])
-
-        for timepoint in timepoints:
-            surveyId = timepoint.surveyId
-
-            needCompleted = needCompleted(userId, surveyId)
-            isCompleted = isCompleted(userId, surveyId)
-
-            if isCompleted is True:
-                continue
-
-            # Check whether it is still possible to complete timepoint
-            start = ustart_utc + td2tp
-            end   = ustart_utc + td2nudge
-            isNudge = isWithinWindow(start, end)
-
-            if isNudge is True:
-                nudges.append(Nudge(userID, surveyId))
-
-    return nudges
-
-
-""" TESTED """
-def appendData(file_path, data):
+def appendData(file_path, data): # Tested
 
     assert isinstance(data, list)
 
@@ -191,7 +251,7 @@ def appendData(file_path, data):
     with open(file_path, 'w+') as file:
         json.dump(file_data, file)
 
-def getDataFileName(study, tp, base_dir=base_dir):
+def getDataFileName(study, tp, base_dir=base_dir): # Tested
 
     if study.type=='stacked':
         return os.path.join(base_dir, "data/{}_{}.json".format(study.name, 'stacked'))
@@ -199,47 +259,63 @@ def getDataFileName(study, tp, base_dir=base_dir):
     if study.type=='indep':
         return os.path.join(base_dir, "data/{}_{}.json".format(study.name, tp.name))
 
-def convert_iso2dt(dstr):
-    """ Converts date trings from PS data to datetime.datetime objects.
-        Input:
-            dstr: isofromatted date string
+def writeLastCheckTime(base_dir=base_dir): # Tested
+    """ Updates last_time_checked.txt, which contains the isostring datetime for the last time the nuddger was run (in UTC) """
 
-        Returns:
-            dt_loc: datetime obj in participant's local timezone
-            dt_utc: datetime obj in UTC timezone
-    """
+    now = getUTCnow()
+    file_path = os.path.join(base_dir, 'last_time_checked.txt')
+    with open(file_path, 'w+') as file:
+        file.write(now.isoformat())
+    logging.info('last_time_checked.txt updated.')
 
-    assert (len(dstr)==25 or (len(dstr)==20) and dstr[-1]=='Z')
-    assert dstr[4]=='-'
-    assert dstr[7]=='-'
-    assert dstr[10:19]=='T00:00:00'
+def readLastCheckTime(base_dir=base_dir): # Tested
+    """ Reads and returns last_time_checked.txt, which contains the isostring datetime for the last time the nuddger was run (in UTC) """
 
-    dt_loc = dateutil.parser.parse(dstr)
-    dt_utc = dt_loc.astimezone(pytz.timezone('UTC'))
+    file_path = os.path.join(base_dir, 'last_time_checked.txt')
+    with open(file_path, 'r') as file:
+        now_str = file.readline()
+    assert len(now_str)==25
+    logging.info('last_time_checked.txt read.')
+    return now_str
 
-    return dt_loc, dt_utc
 
-def isWithinWindow(start, end):
-    """ Checks whether now is between start and end
-        input:
-            start: datetime.datetime of start in UTC
-            end:   datetime.datetime of end in UTC
-    """
+""" Cron run check """
+def scheduletester():
+    nudgelog.info('Schedueler executed.')
+if __name__ == "__main__":
+    scheduletester()
 
-    # Timezones need to be represented by pytz module
-    assert start.tzname()=='UTC'
-    assert isinstance(start.tzinfo, type(pytz.UTC))
-    assert end.tzname()=='UTC'
-    assert isinstance(end.tzinfo, type(pytz.UTC))
 
-    now = getNowUtc()
+""" Trash """
+#Nudge = collections.namedtuple('Nudge', 'userID, surveyId')
+def collect_nudges(ps_data, timepoints):
 
-    if (start <= now) and (now <= end):
-        return True
-    else:
-        return False
+    assert isinstance(study, list)
+    assert all([isinstance(element, Timepoint) for element in study])
+    assert isinstance(ps_data, list)
+    assert all([isinstance(element, dict) for element in ps_data]) #Check keys?
 
-def getNowUtc():
-    """ Wrapper to get current datetime """
-    #return datetime.datetime.utcnow().astimezone(pytz.timezone('UTC'))
-    return datetime.datetime.now().replace(microsecond=0).astimezone(pytz.timezone('UTC'))
+    nudges=[]
+
+    for user in ps_data:
+        userID = user['key']
+        udtStartLOC, udtStartUTC = iso2dt(user['date'])
+
+        for timepoint in timepoints:
+            surveyId = timepoint.surveyId
+
+            needCompleted = needCompleted(userId, surveyId)
+            isCompleted = isCompleted(userId, surveyId)
+
+            if isCompleted is True:
+                continue
+
+            # Check whether it is still possible to complete timepoint
+            start = udtStartUTC + td2end
+            end   = udtStartUTC + td2nudge
+            isNudge = isWithinWindow(start, end)
+
+            if isNudge is True:
+                nudges.append(Nudge(userID, surveyId))
+
+    return nudges

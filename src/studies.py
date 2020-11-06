@@ -8,12 +8,14 @@ from datetime import timedelta as td
 
 
 class Study():
+    """ Representation of studies """
 
     def __init__(self, name, type, tps=[], isActive=True):
         assert type in ['indep', 'stacked']
         assert isinstance(isActive, bool)
         assert isinstance(name, str)
-        assert (tps==[] or (isinstance(tps, list) and all([isinstance(tp, Timepoint) for tp in tps])))
+        #assert (tps==[] or (isinstance(tps, list) and all([isinstance(tp, Timepoint) for tp in tps])))
+        assert isinstance(tps, list) and all([isinstance(tp, Timepoint) for tp in tps])
 
         self.name = name
         self.type = type # Stacked type has the study in a single SG survey, indep has multiple SG surveys
@@ -27,16 +29,16 @@ class Study():
                 print('not all surveyIds are unique')
                 return False
 
-            if not all([isinstance(tp.end_qid, int) for tp in self.tps]):
-                print('not all end_qids are int')
+            if not all([isinstance(tp.lastQID, int) for tp in self.tps]):
+                print('not all lastQIDs are int')
                 return False
 
-            if not len(set([tp.end_qid for tp in self.tps]))==len(self.tps):
-                print('not all end_qids are unique')
+            if not len(set([tp.lastQID for tp in self.tps]))==len(self.tps):
+                print('not all lastQIDs are unique')
                 return False
 
-            if not len(set([tp.start_page for tp in self.tps]))==len(self.tps):
-                print('not all start_pages are unique')
+            if not len(set([tp.startPageId for tp in self.tps]))==len(self.tps):
+                print('not all startPageIds are unique')
                 return False
 
             return True
@@ -46,36 +48,42 @@ class Study():
             if not len(set([tp.surveyId for tp in self.tps]))==len(self.tps):
                 return False
 
-            if not all([tp.start_page==1 for tp in self.tps]):
+            if not all([tp.startPageId==1 for tp in self.tps]):
                 return False
 
             return True
 
 class Timepoint():
+    """ Representation of tempoints withina study """
 
-    def __init__(self, name, surveyId, td2tp, td2nudge, remind=True, end_qid=None, start_page=1):
+    def __init__(self, name, surveyId, td2start, td2end, td2nudge, remind=True, firstQID=None, lastQID=None, startPageId=1):
         assert isinstance(name, str)
         assert isinstance(surveyId, str)
-        assert isinstance(td2tp, td)
+        assert isinstance(td2start, td)
+        assert isinstance(td2end, td)
         assert isinstance(td2nudge, td)
         assert isinstance(remind, bool)
-        assert isinstance(start_page, int)
-        assert (end_qid is None) or isinstance(end_qid, int)
+        assert isinstance(startPageId, int)
+        assert (lastQID is None) or isinstance(lastQID, int)
 
         self.name = name
         self.surveyId = surveyId
-        self.td2tp = td2tp       # td2tp: the datetime.deltatime from start (as entered to PS) to the end of tp, i.e. start + td2tp = end of TP
-        self.td2nudge = td2nudge # td2nudge: the datetime.deltatime from start (as entered to PS) to the end of the nudge period, i.e. start + td2tp = end of TP
+        self.td2start = td2start # td2start: datetime.deltatime from user['date'] to start of TP, i.e. user['date'] + td2start = start of TP
+        self.td2end = td2end     # td2end: datetime.deltatime from start of TP to end of TP, i.e. user['date'] + td2start + td2end = end of TP
+        self.td2nudge = td2nudge # td2nudge: datetime.deltatime from end of TP to the end of nudge time window
         self.remind = remind
-        self.start_page = start_page
-        self.end_qid = end_qid
+        self.startPageId = startPageId
+        self.firstQID = firstQID
+        self.lastQID = lastQID
 
+
+""" Define mock studies """
 indep_test_study = Study(
     name='indep_test',
     type='indep',
     tps = [
-        Timepoint(name='tp1', surveyId='90288073', td2tp=td(days=0), td2nudge=td(days=1)),
-        Timepoint(name='tp2', surveyId='90288074', td2tp=td(days=7), td2nudge=td(days=2)),
+        Timepoint(name='tp1', surveyId='90288073', td2start=td(days=1), td2end=td(days=1), td2nudge=td(days=1), firstQID=2, lastQID=18),
+        Timepoint(name='tp2', surveyId='90289410', td2start=td(days=6), td2end=td(days=1), td2nudge=td(days=2), firstQID=7, lastQID=19),
     ]
 )
 
@@ -83,9 +91,11 @@ stacked_test_study = Study(
     name='stacked_test',
     type='stacked',
     tps = [
-        Timepoint(name='tp1', surveyId='90286853', td2tp=td(days=0), td2nudge=td(days=1), end_qid=2, start_page=1),
-        Timepoint(name='tp2', surveyId='90286853', td2tp=td(days=7), td2nudge=td(days=2), end_qid=5, start_page=5),
+        Timepoint(name='tp1', surveyId='90286853', td2start=td(days=1), td2end=td(days=1), td2nudge=td(days=1), firstQID=2, lastQID=18, startPageId=1),
+        Timepoint(name='tp2', surveyId='90286853', td2start=td(days=6), td2end=td(days=1), td2nudge=td(days=2), firstQID=7, lastQID=19, startPageId=5),
     ]
 )
 
 studies_list=[indep_test_study, stacked_test_study]
+for study in studies_list:
+    assert study.areTpsConsistent()

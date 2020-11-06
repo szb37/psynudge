@@ -56,3 +56,10 @@ https://restapi.alchemer.com/v5/survey/123456/surveyresponse?filter[field][0]=
 date_submitted&filter[operator][0]=>=&filter[value][0]=2011-02-23+13:23:28
 
 date_submitted>'2011-02-23+13:23:28'
+
+
+""" load test data """
+import json
+file_path='/media/sf_vm_share/psynudge/tests/fixtures/stacked_test_stacked.json'
+with open(file_path, 'r') as file:
+        file_data = json.load(file)
