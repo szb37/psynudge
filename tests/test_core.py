@@ -276,3 +276,79 @@ class CoreTestSuit(unittest.TestCase):
             psynudge.core.isCompleted(userId='002', surveyData=surveyData, firstQID=tp2.firstQID, lastQID=tp2.lastQID))
         self.assertTrue(
             psynudge.core.isCompleted(userId='003', surveyData=surveyData, firstQID=tp2.firstQID, lastQID=tp2.lastQID))
+
+    def test_getResponseSguid(self):
+
+        # Only URL SGUID variable
+        response= {
+         'url_variables': {'sguid':
+                            {'key': 'sguid',
+                             'value': 'Qwwm5fd6fdlllll6',
+                             'type': 'url'}},
+         'survey_data': {
+           '72': {
+                'id': 72,
+                'type': 'HIDDEN',
+                'question': 'Capture SGUID',
+                'section_id': 4,
+                'shown': False}}}
+        self.assertEqual(psynudge.core.getResponseSguid(response), 'Qwwm5fd6fdlllll6')
+
+        # Only hidden SGUID variable
+        response= {
+         'id': '666',
+         'url_variables': {},
+         'survey_data': {
+             '72': {'id': 72,
+             'type': 'HIDDEN',
+             'question': 'Capture SGUID',
+             'answer': 'Qwwm5fd6fdlllll6',
+             'shown': True}}}
+        self.assertEqual(psynudge.core.getResponseSguid(response), 'Qwwm5fd6fdlllll6')
+
+        # Both hidden + URL SGUID variable - match
+        response = {
+         'id': '666',
+         'url_variables': {'sguid':
+                            {'key': 'sguid',
+                             'value': 'Qwwm5fd6fdlllll6',
+                             'type': 'url'}},
+         'survey_data': {
+             '72': {'id': 72,
+             'type': 'HIDDEN',
+             'question': 'Capture SGUID',
+             'answer': 'Qwwm5fd6fdlllll6',
+             'shown': True}}}
+        self.assertEqual(psynudge.core.getResponseSguid(response), 'Qwwm5fd6fdlllll6')
+
+        # Both hidden + URL SGUID variable - mismatch
+        response = {
+         'id': '666',
+         'url_variables': {'sguid':
+                            {'key': 'sguid',
+                             'value': 'Qwwm5fd6fdlllll6',
+                             'type': 'url'}},
+         'survey_data': {
+             '72': {'id': 72,
+             'type': 'HIDDEN',
+             'question': 'Capture SGUID',
+             'answer': 'aaaaaaaaaaaaaaaaa',
+             'shown': True}}}
+        with self.assertRaises(AssertionError):
+            psynudge.core.getResponseSguid(response)
+
+        # Neither SGUID sources are present
+        response = {
+         'id': '666',
+         'url_variables': {'AAAA':
+                            {'key': 'sguid',
+                             'value': 'Qwwm5fd6fdlllll6',
+                             'type': 'url'}},
+         'survey_data': {
+             '72': {'id': 72,
+             'type': 'HIDDEN',
+             'question': 'BBBB',
+             'answer': 'aaaaaaaaaaaaaaaaa',
+             'shown': True}}}
+        with self.assertRaises(AssertionError):
+            psynudge.core.getResponseSguid(response)

@@ -116,7 +116,8 @@ def getResponseSguid(response):
 
     for key, value in response['survey_data'].items():
         if value['question']=='Capture SGUID':
-            sguid_hidden = value['answer']
+            if value['shown'] is True:
+                sguid_hidden = value['answer']
 
     try:
         sguid_url = response['url_variables']['sguid']['value']
