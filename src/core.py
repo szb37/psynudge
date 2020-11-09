@@ -2,8 +2,6 @@
 :Author: Balazs Szigeti <b.islander@protonmail.com>
 :Copyright: 2020, DrugNerdsLab
 :License: MIT
-
-Currently does not nudge for partial completions
 """
 
 from surveygizmo import SurveyGizmo
@@ -31,7 +29,9 @@ nudgelog = logging.getLogger("nudgelog")
 nudgelog.info('Core imported.')
 
 
-def run_nudges(studies):
+def get_nudges(studies, base_dir=base_dir):
+
+    updateData(studies=studies, forceNew=False, base_dir=base_dir)
 
     for study in studies:
         if study.isActive is False:
@@ -46,6 +46,7 @@ def run_nudges(studies):
 
             for tp in study.timepoints:
                 nudges = isNudge(userId, dtStartUTC, tp, surveyData)
+
 
 """ Miscs """
 def isNudge(userId, dtStartUTC, tp, surveyData): # Tested
@@ -185,6 +186,18 @@ def isWithinWindow(start, end): # Tested
 
 
 """  Disk data manipulations """
+def updateData(studies, forceNew=False, base_dir=base_dir):
+    """ Updates data from SG """
+
+    lastCheck = readLastCheckTime(base_dir=base_dir)
+
+    for study in studies:
+        if study.isActive is False:
+            continue
+
+    getData(study, forceNew=False, lastCheck=None, base_dir=base_dir)
+    writeLastCheckTime(base_dir=base_dir)
+
 def getData(study, forceNew=False, lastCheck=None, base_dir=base_dir):
     """ Download SG data save """
 
@@ -232,6 +245,7 @@ def getData(study, forceNew=False, lastCheck=None, base_dir=base_dir):
             return
 
 def loadStudyData(study): # WIP
+
     psData = get_ps_data(study)
     getData(study=study, lastCheck=None)
     surveyData = read_sg_data()
@@ -267,7 +281,6 @@ def writeLastCheckTime(base_dir=base_dir): # Tested
     file_path = os.path.join(base_dir, 'last_time_checked.txt')
     with open(file_path, 'w+') as file:
         file.write(now.isoformat())
-    logging.info('last_time_checked.txt updated.')
 
 def readLastCheckTime(base_dir=base_dir): # Tested
     """ Reads and returns last_time_checked.txt, which contains the isostring datetime for the last time the nuddger was run (in UTC) """
@@ -276,15 +289,12 @@ def readLastCheckTime(base_dir=base_dir): # Tested
     with open(file_path, 'r') as file:
         now_str = file.readline()
     assert len(now_str)==25
-    logging.info('last_time_checked.txt read.')
     return now_str
 
 
 """ Cron run check """
 def scheduletester():
     nudgelog.info('Schedueler executed.')
-if __name__ == "__main__":
-    scheduletester()
 
 
 """ Trash """

@@ -5,5 +5,5 @@
 """
 
 from src import core
-#print("hello world")
-core.scheduletester()
+
+core.scheduletester() # update psynudge.log 
