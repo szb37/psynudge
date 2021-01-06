@@ -54,7 +54,7 @@ class Study():
             return True
 
 class Timepoint():
-    """ Representation of tempoints withina study """
+    """ Representation of tempoints within a study """
 
     def __init__(self, name, surveyId, td2start, td2end, td2nudge, remind=True, firstQID=None, lastQID=None, startPageId=1):
         assert isinstance(name, str)
@@ -67,7 +67,7 @@ class Timepoint():
         assert (lastQID is None) or isinstance(lastQID, int)
 
         self.name = name
-        self.surveyId = surveyId
+        self.surveyId = surveyId # this can be used as timepoint Id as well
         self.td2start = td2start # td2start: datetime.deltatime from user['date'] to start of TP, i.e. user['date'] + td2start = start of TP
         self.td2end = td2end     # td2end: datetime.deltatime from start of TP to end of TP, i.e. user['date'] + td2start + td2end = end of TP
         self.td2nudge = td2nudge # td2nudge: datetime.deltatime from end of TP to the end of nudge time window
@@ -96,6 +96,9 @@ stacked_test_study = Study(
     ]
 )
 
+""" Define real studies """
+
 studies_list=[indep_test_study, stacked_test_study]
-for study in studies_list:
-    assert study.areTpsConsistent()
+
+#for study in studies_list:
+#    assert study.areTpsConsistent()

@@ -2,10 +2,13 @@
 :Author: Balazs Szigeti <b.islander@protonmail.com>
 :Copyright: 2020, DrugNerdsLab
 :License: MIT
+
+python -m pytest psynudge/tests/
 """
 
 
 from unittest import mock
+from pony.orm import db_session
 import dateutil.parser
 import datetime
 import psynudge
@@ -352,3 +355,25 @@ class CoreTestSuit(unittest.TestCase):
              'shown': True}}}
         with self.assertRaises(AssertionError):
             psynudge.core.getResponseSguid(response)
+
+    def test_isNudgeSent(self):
+
+        test_db = psynudge.db.getDb(filepath=':memory:', create_db=True)
+
+        with db_session:
+            test_db.Nudge(userId='1', studyId='2', surveyId='3', isSent=True)
+            test_db.Nudge(userId='2', studyId='3', surveyId='4', isSent=True)
+            test_db.Nudge(userId='3', studyId='4', surveyId='5', isSent=False)
+
+        self.assertFalse(psynudge.core.isNudgeSent(userId='9', studyId='9', surveyId='9', db=test_db))
+        self.assertTrue(psynudge.core.isNudgeSent(userId='1', studyId='2', surveyId='3', db=test_db))
+        self.assertTrue(psynudge.core.isNudgeSent(userId='2', studyId='3', surveyId='4', db=test_db))
+
+        with self.assertRaises(AssertionError):
+            psynudge.core.isNudgeSent(userId='3', studyId='4', surveyId='5', db=test_db)
+
+        with db_session:
+            test_db.Nudge(userId='1', studyId='2', surveyId='3', isSent=True)
+
+        with self.assertRaises(AssertionError):
+            psynudge.core.isNudgeSent(userId='1', studyId='2', surveyId='3', db=test_db)

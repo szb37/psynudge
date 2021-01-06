@@ -2,10 +2,15 @@
 :Author: Balazs Szigeti <b.islander@protonmail.com>
 :Copyright: 2020, DrugNerdsLab
 :License: MIT
+
+conda env export > environment.yml
+conda env create -f environment.yml
 """
 
 from surveygizmo import SurveyGizmo
 from .tokens import api_key, secret_key
+from .db import getDb
+from pony.orm import db_session, commit
 from .studies import *
 import dateutil.parser
 import datetime
@@ -28,8 +33,15 @@ logging.basicConfig(
 nudgelog = logging.getLogger("nudgelog")
 nudgelog.info('Core imported.')
 
+db = getDb()
+#with db_session:
+#    db.Nudge(userId='1', studyId='2', surveyId='3', isSent=True)
+#import pdb; pdb.set_trace()
 
-def get_nudges(studies, base_dir=base_dir):
+
+
+@db_session
+def updateNudges(studies, base_dir=base_dir):
 
     updateData(studies=studies, forceNew=False, base_dir=base_dir)
 
@@ -45,10 +57,44 @@ def get_nudges(studies, base_dir=base_dir):
             dtStartUTC = dt2UTC(dtStartLOC)     # Start datetime in UTC
 
             for tp in study.timepoints:
-                nudges = isNudge(userId, dtStartUTC, tp, surveyData)
+
+                isnudge = isNudge(userId, dtStartUTC, tp, surveyData)
+                assert isinstance(isnudge, bool)
+                if isnudge is False:
+                    continue
+
+                isnudgesent = isNudgeSent(userId, studyId, surveyId)
+                assert isinstance(isnudgesent, bool)
+                if isnudgesent is True:
+                    continue
+
+                Nudge(
+                    userId=userId,
+                    surveyId=surveyId,
+                    studyId=studyId,
+                    isSent = False)
+                commit()
 
 
-""" Miscs """
+""" Nudge detection """
+@db_session
+def isNudgeSent(userId, studyId, surveyId, db):
+    """ Returns True/False if the nudge was / wasnt sent already """
+
+    matching_nudge = db.Nudge.select(lambda nudge:
+        nudge.userId==userId and
+        nudge.surveyId==surveyId and
+        nudge.studyId==studyId).fetch()
+
+    assert len(matching_nudge) in [0,1]
+
+    if len(matching_nudge)==0:
+        return False
+
+    if len(matching_nudge)==1:
+        assert matching_nudge[0].isSent is True
+        return True
+
 def isNudge(userId, dtStartUTC, tp, surveyData): # Tested
     """ Returns True if tp is witin nudge time window and tp has not been completed yet, False otherwise """
     assert isinstance(userId, str)
@@ -134,55 +180,6 @@ def getResponseSguid(response):
         return sguid_hidden
     elif sguid_url is None and sguid_hidden is None:
         assert False
-
-
-""" Datetime manipulations """
-def iso2dt(dstr): # Tested
-    """ Converts ISO date string to datetime.datetime obj """
-
-    assert (len(dstr)==25 or (len(dstr)==20) and dstr[-1]=='Z')
-    assert dstr[4]=='-'
-    assert dstr[7]=='-'
-    assert dstr[10:19]=='T00:00:00'
-
-    dt_loc = dateutil.parser.parse(dstr)
-    dt_utc = dt_loc.astimezone(pytz.timezone('UTC'))
-
-    return dt_loc, dt_utc
-
-def dt2iso(dt): # Wrapper
-    """ Wrapper to convert ISO date string to datetime.datetime obj """
-    assert isinstance(dt, datetime.datetime)
-    return dateutil.parser.parse(dstr)
-
-def dt2UTC(dt): # Wrapper
-    """ Wrapper to convert datetime.datetime obj to utc timezone"""
-    assert isinstance(dt, datetime.datetime)
-    return dt.astimezone(pytz.timezone('UTC'))
-
-def getUTCnow(): # Wrapper
-    """ Wrapper to get current datetime """
-    return datetime.datetime.utcnow().replace(microsecond=0).astimezone(pytz.timezone('UTC'))
-
-def isWithinWindow(start, end): # Tested
-    """ Checks whether now is between start and end
-        input:
-            start: datetime.datetime of start in UTC
-            end:   datetime.datetime of end in UTC
-    """
-
-    # Timezones need to be represented by pytz module
-    assert start.tzname()=='UTC'
-    assert isinstance(start.tzinfo, type(pytz.UTC))
-    assert end.tzname()=='UTC'
-    assert isinstance(end.tzinfo, type(pytz.UTC))
-
-    now = getUTCnow()
-
-    if (start <= now) and (now <= end):
-        return True
-    else:
-        return False
 
 
 """  Disk data manipulations """
@@ -292,41 +289,55 @@ def readLastCheckTime(base_dir=base_dir): # Tested
     return now_str
 
 
+""" Datetime manipulations """
+def iso2dt(dstr): # Tested
+    """ Converts ISO date string to datetime.datetime obj """
+
+    assert (len(dstr)==25 or (len(dstr)==20) and dstr[-1]=='Z')
+    assert dstr[4]=='-'
+    assert dstr[7]=='-'
+    assert dstr[10:19]=='T00:00:00'
+
+    dt_loc = dateutil.parser.parse(dstr)
+    dt_utc = dt_loc.astimezone(pytz.timezone('UTC'))
+
+    return dt_loc, dt_utc
+
+def dt2iso(dt): # Wrapper
+    """ Wrapper to convert ISO date string to datetime.datetime obj """
+    assert isinstance(dt, datetime.datetime)
+    return dateutil.parser.parse(dstr)
+
+def dt2UTC(dt): # Wrapper
+    """ Wrapper to convert datetime.datetime obj to utc timezone"""
+    assert isinstance(dt, datetime.datetime)
+    return dt.astimezone(pytz.timezone('UTC'))
+
+def getUTCnow(): # Wrapper
+    """ Wrapper to get current datetime """
+    return datetime.datetime.utcnow().replace(microsecond=0).astimezone(pytz.timezone('UTC'))
+
+def isWithinWindow(start, end): # Tested
+    """ Checks whether now is between start and end
+        input:
+            start: datetime.datetime of start in UTC
+            end:   datetime.datetime of end in UTC
+    """
+
+    # Timezones need to be represented by pytz module
+    assert start.tzname()=='UTC'
+    assert isinstance(start.tzinfo, type(pytz.UTC))
+    assert end.tzname()=='UTC'
+    assert isinstance(end.tzinfo, type(pytz.UTC))
+
+    now = getUTCnow()
+
+    if (start <= now) and (now <= end):
+        return True
+    else:
+        return False
+
+
 """ Cron run check """
 def scheduletester():
     nudgelog.info('Schedueler executed.')
-
-
-""" Trash """
-#Nudge = collections.namedtuple('Nudge', 'userID, surveyId')
-def collect_nudges(ps_data, timepoints):
-
-    assert isinstance(study, list)
-    assert all([isinstance(element, Timepoint) for element in study])
-    assert isinstance(ps_data, list)
-    assert all([isinstance(element, dict) for element in ps_data]) #Check keys?
-
-    nudges=[]
-
-    for user in ps_data:
-        userID = user['key']
-        udtStartLOC, udtStartUTC = iso2dt(user['date'])
-
-        for timepoint in timepoints:
-            surveyId = timepoint.surveyId
-
-            needCompleted = needCompleted(userId, surveyId)
-            isCompleted = isCompleted(userId, surveyId)
-
-            if isCompleted is True:
-                continue
-
-            # Check whether it is still possible to complete timepoint
-            start = udtStartUTC + td2end
-            end   = udtStartUTC + td2nudge
-            isNudge = isWithinWindow(start, end)
-
-            if isNudge is True:
-                nudges.append(Nudge(userID, surveyId))
-
-    return nudges
