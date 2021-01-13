@@ -12,6 +12,7 @@ from pony.orm import db_session
 import dateutil.parser
 import datetime
 import psynudge
+import mock_db
 import unittest
 import pytz
 import json
@@ -19,34 +20,52 @@ import os
 
 test_dir = os.path.dirname(os.path.abspath(__file__))
 
-class CoreTestSuit(unittest.TestCase):
+#    tp = db.Timepoint(
+#        name='test',
+#        surveyId='000',
+#        td2start=datetime.timedelta(days=6),
+#        td2end=datetime.timedelta(days=1),
+#        td2nudge=datetime.timedelta(days=1),)
 
-    tp = psynudge.Timepoint(
-        name='test',
-        surveyId='000',
-        td2start=datetime.timedelta(days=6),
-        td2end=datetime.timedelta(days=1),
-        td2nudge=datetime.timedelta(days=1),
-        )
+class DatetimeTests(unittest.TestCase):
+    """ Tests for datetime manipulations """
+
     dtStartUTC = dateutil.parser.parse("2020-01-10T00:00:00Z").astimezone(pytz.timezone('UTC'))
+
+    def test_iso2utcdt(self):
+
+        dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00Z')
+        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00Z').astimezone(pytz.timezone('UTC')))
+
+        dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00+00:00')
+        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00Z').astimezone(pytz.timezone('UTC')))
+
+        dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00+02:00')
+        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00+02:00').astimezone(pytz.timezone('UTC')))
+
+        dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00-03:00')
+        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00-03:00').astimezone(pytz.timezone('UTC')))
+
 
     def test_iso2dt(self):
 
-        dt_loc, dt_utc = psynudge.core.iso2dt('2020-01-10T00:00:00Z')
+        dt_loc = psynudge.core.iso2dt('2020-01-10T00:00:00Z')
         self.assertEqual(dt_loc, dateutil.parser.parse('2020-01-10T00:00:00Z').astimezone(pytz.timezone('UTC')))
-        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00Z').astimezone(pytz.timezone('UTC')))
 
-        dt_loc, dt_utc = psynudge.core.iso2dt('2020-01-10T00:00:00+02:00')
+        dt_loc = psynudge.core.iso2dt('2020-01-10T00:00:00+00:00')
+        self.assertEqual(dt_loc, dateutil.parser.parse('2020-01-10T00:00:00Z').astimezone(pytz.timezone('UTC')))
+
+        dt_loc = psynudge.core.iso2dt('2020-01-10T00:00:00+02:00')
+        dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00+02:00')
         self.assertEqual(dt_loc.astimezone(pytz.timezone('UTC')), dt_utc)
         self.assertEqual(dt_loc.astimezone(pytz.timezone('UTC')), dateutil.parser.parse('2020-01-10T00:00:00+02:00').astimezone(pytz.timezone('UTC')))
-        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00+02:00').astimezone(pytz.timezone('UTC')))
 
-        dt_loc, dt_utc = psynudge.core.iso2dt('2020-01-10T00:00:00-03:00')
+        dt_loc = psynudge.core.iso2dt('2020-01-10T00:00:00-03:00')
+        dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00-03:00')
         self.assertEqual(dt_loc.astimezone(pytz.timezone('UTC')), dt_utc)
         self.assertEqual(dt_loc.astimezone(pytz.timezone('UTC')), dateutil.parser.parse('2020-01-10T00:00:00-03:00').astimezone(pytz.timezone('UTC')))
-        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00-03:00').astimezone(pytz.timezone('UTC')))
 
-    @mock.patch('psynudge.src.core.getUTCnow')
+    @mock.patch('psynudge.src.core.getUtcNow')
     def test_isWithinWindow(self, mock):
 
         mock.return_value = dateutil.parser.parse("2020-01-10T00:00:00Z").astimezone(pytz.timezone('UTC'))
@@ -87,6 +106,175 @@ class CoreTestSuit(unittest.TestCase):
         with self.assertRaises(AssertionError):
             self.assertTrue(psynudge.core.isWithinWindow(start, end))
 
+class DatabaseTests(unittest.TestCase):
+
+    db = mock_db.getMockDb()
+
+    @db_session
+    def test_updateParticipantFromPS_fromFile(self, db=db):
+
+        psynudge.core.updateParticipantFromPS(
+            db = db,
+            ps_file_path = os.path.join(test_dir, 'fixtures', 'ps_data.json'),
+            study = db.Study.select(lambda study: study.name=='indep_test').first())
+
+        self.assertEqual(db.Participant.select().count(), 9)
+        self.assertEqual(db.Participant.select().count()*2, db.Completion.select().count())
+
+        # Check that Ids are correct
+        ps_ids = [part.psId for part in db.Participant.select().fetch()]
+        expected_ps_ids = ['test1', 'test2', 'test3', 'test4', 'test5', 'test6', 'test7', 'test8', 'test9']
+        for expected_ps_id in expected_ps_ids:
+            self.assertTrue(expected_ps_id in ps_ids)
+
+        #{"key":"test7", "email":"test7@test.net", "date":"2020-01-10T00:00:00+02:00", "id":"test7"},
+        test7p = db.Participant.select(lambda p: p.psId=='test7').first()
+        self.assertEqual(test7p.whenStart, '2020-01-09T22:00:00+00:00')
+        self.assertEqual(test7p.whenFinish, '2020-01-18T22:00:00+00:00')
+
+        #{"key":"test5", "email":"test5@test.net", "date":"2020-01-10T00:00:00Z", "id":"test5"},
+        test7p = db.Participant.select(lambda p: p.psId=='test5').first()
+        self.assertEqual(test7p.whenStart, '2020-01-10T00:00:00+00:00')
+        self.assertEqual(test7p.whenFinish, '2020-01-19T00:00:00+00:00')
+
+        #{"key":"test1", "email":"test1@test.net", "date":"2020-01-10T00:00:00-04:00", "id":"test1"},
+        test7p = db.Participant.select(lambda p: p.psId=='test1').first()
+        self.assertEqual(test7p.whenStart, '2020-01-10T04:00:00+00:00')
+        self.assertEqual(test7p.whenFinish, '2020-01-19T04:00:00+00:00')
+
+        db.rollback()
+
+    @db_session
+    def test_updateParticipantFromPS_fromJson(self, db=db):
+        """ besides the update test, this test also contains tests for duplicate participants """
+
+        self.assertEqual(db.Participant.select().count(), 0)
+
+        mock_ps = [
+            {"key":"test1", "email":"test1@test.net", "date":"2020-01-10T00:00:00-04:00", "id":"test1"},
+            {"key":"test2", "email":"test2@test.net", "date":"2020-01-10T00:00:00-03:00", "id":"test2"},
+            {"key":"test3", "email":"test3@test.net", "date":"2020-01-10T00:00:00-04:00", "id":"test3"},
+            {"key":"test4", "email":"test4@test.net", "date":"2020-01-10T00:00:00-01:00", "id":"test4"},
+            {"key":"test5", "email":"test5@test.net", "date":"2020-01-10T00:00:00Z"     , "id":"test5"},
+            {"key":"test6", "email":"test6@test.net", "date":"2020-01-10T00:00:00+01:00", "id":"test6"},
+            {"key":"test7", "email":"test7@test.net", "date":"2020-01-10T00:00:00+02:00", "id":"test7"},
+            {"key":"test8", "email":"test8@test.net", "date":"2020-01-10T00:00:00+03:00", "id":"test8"},
+            {"key":"test9", "email":"test9@test.net", "date":"2020-01-10T00:00:00+04:00", "id":"test9"}]
+
+        psynudge.core.updateParticipantFromPS(
+            db = db,
+            ps_data = mock_ps,
+            study = db.Study.select(lambda study: study.name=='indep_test').first())
+
+        self.assertEqual(db.Participant.select().count(), 9)
+        self.assertEqual(db.Participant.select().count()*2, db.Completion.select().count())
+
+        # Check that Ids are correct
+        ps_ids = [part.psId for part in db.Participant.select().fetch()]
+        expected_ps_ids = ['test1', 'test2', 'test3', 'test4', 'test5', 'test6', 'test7', 'test8', 'test9']
+        for expected_ps_id in expected_ps_ids:
+            self.assertTrue(expected_ps_id in ps_ids)
+
+        #{"key":"test7", "email":"test7@test.net", "date":"2020-01-10T00:00:00+02:00", "id":"test7"},
+        test7p = db.Participant.select(lambda p: p.psId=='test7').first()
+        self.assertEqual(test7p.whenStart, '2020-01-09T22:00:00+00:00')
+        self.assertEqual(test7p.whenFinish, '2020-01-18T22:00:00+00:00')
+
+        #{"key":"test5", "email":"test5@test.net", "date":"2020-01-10T00:00:00Z", "id":"test5"},
+        test7p = db.Participant.select(lambda p: p.psId=='test5').first()
+        self.assertEqual(test7p.whenStart, '2020-01-10T00:00:00+00:00')
+        self.assertEqual(test7p.whenFinish, '2020-01-19T00:00:00+00:00')
+
+        #{"key":"test1", "email":"test1@test.net", "date":"2020-01-10T00:00:00-04:00", "id":"test1"},
+        test7p = db.Participant.select(lambda p: p.psId=='test1').first()
+        self.assertEqual(test7p.whenStart, '2020-01-10T04:00:00+00:00')
+        self.assertEqual(test7p.whenFinish, '2020-01-19T04:00:00+00:00')
+
+        # Add duplcate participants
+        mock_ps2 = [
+            {"key":"test1", "email":"test1@test.net", "date":"2020-01-10T00:00:00-04:00", "id":"test1"},
+            {"key":"test5", "email":"test5@test.net", "date":"2020-01-10T00:00:00Z"     , "id":"test5"},]
+
+        psynudge.core.updateParticipantFromPS(
+            db = db,
+            ps_data = mock_ps2,
+            study = db.Study.select(lambda study: study.name=='indep_test').first())
+
+        self.assertEqual(db.Participant.select().count(), 9)
+        self.assertEqual(db.Participant.select().count()*2, db.Completion.select().count())
+
+        # Check that Ids are correct
+        ps_ids = [part.psId for part in db.Participant.select().fetch()]
+        expected_ps_ids = ['test1', 'test2', 'test3', 'test4', 'test5', 'test6', 'test7', 'test8', 'test9']
+        for expected_ps_id in expected_ps_ids:
+            self.assertTrue(expected_ps_id in ps_ids)
+
+        #{"key":"test5", "email":"test5@test.net", "date":"2020-01-10T00:00:00Z", "id":"test5"},
+        test7p = db.Participant.select(lambda p: p.psId=='test5').first()
+        self.assertEqual(test7p.whenStart, '2020-01-10T00:00:00+00:00')
+        self.assertEqual(test7p.whenFinish, '2020-01-19T00:00:00+00:00')
+
+        #{"key":"test1", "email":"test1@test.net", "date":"2020-01-10T00:00:00-04:00", "id":"test1"},
+        test7p = db.Participant.select(lambda p: p.psId=='test1').first()
+        self.assertEqual(test7p.whenStart, '2020-01-10T04:00:00+00:00')
+        self.assertEqual(test7p.whenFinish, '2020-01-19T04:00:00+00:00')
+
+        db.rollback()
+
+    @db_session
+    def test_deleteInactiveParticipants(self, db=db):
+
+        psynudge.core.updateParticipantFromPS(
+            db = db,
+            ps_file_path = os.path.join(test_dir, 'fixtures', 'ps_data.json'),
+            study = db.Study.select(lambda study: study.name=='indep_test').first())
+
+        self.assertEqual(db.Participant.select().count(), 9)
+        self.assertEqual(db.Completion.select().count(), db.Participant.select().count()*2)
+
+        test5 = db.Participant.select(lambda p: p.psId=='test5').first()
+        test5.isActive = False
+        psynudge.core.deleteInactiveParticipants(db=db)
+        self.assertEqual(db.Participant.select().count(), 8)
+        self.assertEqual(db.Completion.select().count(), db.Participant.select().count()*2)
+
+        test5 = db.Participant.select(lambda p: p.psId=='test1').first()
+        test5.isActive = False
+        psynudge.core.deleteInactiveParticipants(db=db)
+        self.assertEqual(db.Participant.select().count(), 7)
+        self.assertEqual(db.Completion.select().count(), db.Participant.select().count()*2)
+
+        db.rollback()
+
+    @db_session
+    @mock.patch('psynudge.src.core.getUtcNow')
+    def test_updateParticipantIsActive(self, mock, db=db):
+
+        psynudge.core.updateParticipantFromPS(
+            db = db,
+            ps_file_path = os.path.join(test_dir, 'fixtures', 'ps_data.json'),
+            study = db.Study.select(lambda study: study.name=='indep_test').first())
+
+        self.assertEqual(db.Participant.select(lambda p: p.isActive is True).count(), 9)
+
+        mock.return_value = dateutil.parser.parse("2020-01-18T23:59:59Z").astimezone(pytz.timezone('UTC'))
+        psynudge.core.updateParticipantIsActive(db=db)
+        self.assertEqual(db.Participant.select(lambda p: p.isActive is True).count(), 5)
+
+        mock.return_value = dateutil.parser.parse("2020-01-19T00:00:01Z").astimezone(pytz.timezone('UTC'))
+        psynudge.core.updateParticipantIsActive(db=db)
+        self.assertEqual(db.Participant.select(lambda p: p.isActive is True).count(), 4)
+
+        mock.return_value = dateutil.parser.parse("2022-01-10T00:00:00Z").astimezone(pytz.timezone('UTC'))
+        psynudge.core.updateParticipantIsActive(db=db)
+        self.assertEqual(db.Participant.select(lambda p: p.isActive is True).count(), 0)
+
+        db.rollback()
+
+
+class PreRefactoringTests(unittest.TestCase):
+
+    @unittest.skip('wip')
     def test_appendData(self, test_dir=test_dir):
 
         # Create test file
@@ -106,6 +294,7 @@ class CoreTestSuit(unittest.TestCase):
             file_data = json.load(file)
         self.assertEqual(file_data, [1,2,3,4,5])
 
+    @unittest.skip('wip')
     def test_getDataFileName(self):
 
         data_dir = os.path.join(psynudge.core.base_dir, 'data')
@@ -121,16 +310,17 @@ class CoreTestSuit(unittest.TestCase):
         )
 
         self.assertEqual(
-            psynudge.core.getDataFileName(psynudge.stacked_test_study, psynudge.stacked_test_study.tps[0]),
-            os.path.join(data_dir, 'stacked_test_stacked.json')
+            psynudge.core.getDataFileName(psynudge.stack_test_study, psynudge.stack_test_study.tps[0]),
+            os.path.join(data_dir, 'stack_test_stack.json')
         )
 
         self.assertEqual(
-            psynudge.core.getDataFileName(psynudge.stacked_test_study, psynudge.stacked_test_study.tps[1]),
-            os.path.join(data_dir, 'stacked_test_stacked.json')
+            psynudge.core.getDataFileName(psynudge.stack_test_study, psynudge.stack_test_study.tps[1]),
+            os.path.join(data_dir, 'stack_test_stack.json')
         )
 
-    @mock.patch('psynudge.src.core.getUTCnow')
+    @unittest.skip('wip')
+    @mock.patch('psynudge.src.core.getUtcNow')
     def test_readWriteLastTimeCheck(self, mock):
 
         mock.return_value = dateutil.parser.parse("2020-01-10T00:00:00Z").astimezone(pytz.timezone('UTC'))
@@ -149,7 +339,8 @@ class CoreTestSuit(unittest.TestCase):
             dateutil.parser.parse("3020-01-10T06:07:55Z").astimezone(pytz.timezone('UTC')),
             dateutil.parser.parse(lastTimeStr))
 
-    @mock.patch('psynudge.src.core.getUTCnow')
+    @unittest.skip('wip')
+    @mock.patch('psynudge.src.core.getUtcNow')
     def test_isWithinNudgeWindow(self, mock):
 
         mock.return_value = dateutil.parser.parse("2020-01-15T12:00:00Z").astimezone(pytz.timezone('UTC'))
@@ -180,6 +371,7 @@ class CoreTestSuit(unittest.TestCase):
         mock.return_value = dateutil.parser.parse("2020-01-18T11:11:11Z").astimezone(pytz.timezone('UTC'))
         self.assertFalse(psynudge.core.isWithinNudgeWindow(self.dtStartUTC, self.tp))
 
+    @unittest.skip('wip')
     @mock.patch('psynudge.src.core.isWithinNudgeWindow')
     @mock.patch('psynudge.src.core.isCompleted')
     def test_isNudge(self, mockIsCompleted, mockIsWithinNudgeWindow):
@@ -200,6 +392,7 @@ class CoreTestSuit(unittest.TestCase):
         mockIsWithinNudgeWindow.return_value = True
         self.assertFalse(psynudge.core.isNudge(userId='000', dtStartUTC=self.dtStartUTC, tp=self.tp, surveyData=[]))
 
+    @unittest.skip('wip')
     def test_isCompleted(self):
         """
         https://survey.alchemer.eu/s3/90288073/indep-tp1?sguid=002 # Done - started, not finished
@@ -211,14 +404,14 @@ class CoreTestSuit(unittest.TestCase):
         https://survey.alchemer.eu/s3/90289410/indep-tp2-copy?sguid=002 # Done - started, not finished
         https://survey.alchemer.eu/s3/90289410/indep-tp2-copy?sguid=003 # Done, finished
 
-        https://survey.alchemer.eu/s3/90286853/stacked?sguid=002                # Done - started, not finished
-        https://survey.alchemer.eu/s3/90286853/stacked?sguid=002&__sgtarget=5   # Done - started, not finished
-        https://survey.alchemer.eu/s3/90286853/stacked?sguid=003                # Done - finished both
-        https://survey.alchemer.eu/s3/90286853/stacked?sguid=003&__sgtarget=5   # Done - finished both
-        https://survey.alchemer.eu/s3/90286853/stacked?sguid=004                # Done - started TP1, finished TP2
-        https://survey.alchemer.eu/s3/90286853/stacked?sguid=004&__sgtarget=5   # Done - started TP1, finished TP2
-        https://survey.alchemer.eu/s3/90286853/stacked?sguid=005                # Done - finished TP1, started TP2
-        https://survey.alchemer.eu/s3/90286853/stacked?sguid=005&__sgtarget=5   # Done - finished TP1, started TP2
+        https://survey.alchemer.eu/s3/90286853/stack?sguid=002                # Done - started, not finished
+        https://survey.alchemer.eu/s3/90286853/stack?sguid=002&__sgtarget=5   # Done - started, not finished
+        https://survey.alchemer.eu/s3/90286853/stack?sguid=003                # Done - finished both
+        https://survey.alchemer.eu/s3/90286853/stack?sguid=003&__sgtarget=5   # Done - finished both
+        https://survey.alchemer.eu/s3/90286853/stack?sguid=004                # Done - started TP1, finished TP2
+        https://survey.alchemer.eu/s3/90286853/stack?sguid=004&__sgtarget=5   # Done - started TP1, finished TP2
+        https://survey.alchemer.eu/s3/90286853/stack?sguid=005                # Done - finished TP1, started TP2
+        https://survey.alchemer.eu/s3/90286853/stack?sguid=005&__sgtarget=5   # Done - finished TP1, started TP2
         """
 
         # Independent study case
@@ -253,16 +446,16 @@ class CoreTestSuit(unittest.TestCase):
             psynudge.core.isCompleted(userId='003', surveyData=surveyDataTP2, firstQID=tp2.firstQID, lastQID=tp2.lastQID))
 
 
-        # Stacked study case
-        file_path=os.path.join(test_dir, 'fixtures/stacked_test_stacked.json')
+        # stack study case
+        file_path=os.path.join(test_dir, 'fixtures/stack_test_stack.json')
         with open(file_path, 'r') as file:
             surveyData = json.load(file)
 
-        for tp in psynudge.stacked_test_study.tps:
+        for tp in psynudge.stack_test_study.tps:
             if tp.name=='tp1':
                 tp1 = tp
 
-        for tp in psynudge.stacked_test_study.tps:
+        for tp in psynudge.stack_test_study.tps:
             if tp.name=='tp2':
                 tp2 = tp
 
@@ -280,6 +473,7 @@ class CoreTestSuit(unittest.TestCase):
         self.assertTrue(
             psynudge.core.isCompleted(userId='003', surveyData=surveyData, firstQID=tp2.firstQID, lastQID=tp2.lastQID))
 
+    @unittest.skip('wip')
     def test_getResponseSguid(self):
 
         # Only URL SGUID variable
@@ -356,6 +550,7 @@ class CoreTestSuit(unittest.TestCase):
         with self.assertRaises(AssertionError):
             psynudge.core.getResponseSguid(response)
 
+    @unittest.skip('wip')
     def test_isNudgeSent(self):
 
         test_db = psynudge.db.getDb(filepath=':memory:', create_db=True)

@@ -11,7 +11,6 @@ from surveygizmo import SurveyGizmo
 from .tokens import api_key, secret_key
 from .db import getDb
 from pony.orm import db_session, commit
-from .studies import *
 import dateutil.parser
 import datetime
 import logging
@@ -33,13 +32,6 @@ logging.basicConfig(
 nudgelog = logging.getLogger("nudgelog")
 nudgelog.info('Core imported.')
 
-db = getDb()
-#with db_session:
-#    db.Nudge(userId='1', studyId='2', surveyId='3', isSent=True)
-#import pdb; pdb.set_trace()
-
-
-
 @db_session
 def updateNudges(studies, base_dir=base_dir):
 
@@ -53,8 +45,8 @@ def updateNudges(studies, base_dir=base_dir):
 
         for user in psData:
             userId = user['key']
-            dtStartLoc = iso2dt(user['date'])   # Start datetime in user's local tz
-            dtStartUTC = dt2UTC(dtStartLOC)     # Start datetime in UTC
+            dtStartLoc = iso2utcdt(user['date'])   # Start datetime in user's local tz
+            dtStartUTC = dt2utcdt(dtStartLOC)     # Start datetime in UTC
 
             for tp in study.timepoints:
 
@@ -237,8 +229,8 @@ def getData(study, forceNew=False, lastCheck=None, base_dir=base_dir):
             with open(file_path, 'w+') as file:
                 json.dump(sg_data['data'], file)
 
-        # no need to iterate over tps with stacked studies
-        if study.type=='stacked':
+        # no need to iterate over tps with stack studies
+        if study.type=='stack':
             return
 
 def loadStudyData(study): # WIP
@@ -265,8 +257,8 @@ def appendData(file_path, data): # Tested
 
 def getDataFileName(study, tp, base_dir=base_dir): # Tested
 
-    if study.type=='stacked':
-        return os.path.join(base_dir, "data/{}_{}.json".format(study.name, 'stacked'))
+    if study.type=='stack':
+        return os.path.join(base_dir, "data/{}_{}.json".format(study.name, 'stack'))
 
     if study.type=='indep':
         return os.path.join(base_dir, "data/{}_{}.json".format(study.name, tp.name))
@@ -274,7 +266,7 @@ def getDataFileName(study, tp, base_dir=base_dir): # Tested
 def writeLastCheckTime(base_dir=base_dir): # Tested
     """ Updates last_time_checked.txt, which contains the isostring datetime for the last time the nuddger was run (in UTC) """
 
-    now = getUTCnow()
+    now = getUtcNow()
     file_path = os.path.join(base_dir, 'last_time_checked.txt')
     with open(file_path, 'w+') as file:
         file.write(now.isoformat())
@@ -293,27 +285,25 @@ def readLastCheckTime(base_dir=base_dir): # Tested
 def iso2dt(dstr): # Tested
     """ Converts ISO date string to datetime.datetime obj """
 
-    assert (len(dstr)==25 or (len(dstr)==20) and dstr[-1]=='Z')
-    assert dstr[4]=='-'
-    assert dstr[7]=='-'
-    assert dstr[10:19]=='T00:00:00'
+    assert isinstance(dstr, str)
+    dt_loc = dateutil.parser.parse(dstr)
+    return dt_loc
 
+def iso2utcdt(dstr): # Tested
+    """ Converts ISO date string to datetime.datetime obj in UTC tz """
+
+    assert isinstance(dstr, str)
     dt_loc = dateutil.parser.parse(dstr)
     dt_utc = dt_loc.astimezone(pytz.timezone('UTC'))
 
-    return dt_loc, dt_utc
+    return dt_utc
 
-def dt2iso(dt): # Wrapper
-    """ Wrapper to convert ISO date string to datetime.datetime obj """
-    assert isinstance(dt, datetime.datetime)
-    return dateutil.parser.parse(dstr)
-
-def dt2UTC(dt): # Wrapper
+def dt2utcdt(dt): # Wrapper
     """ Wrapper to convert datetime.datetime obj to utc timezone"""
     assert isinstance(dt, datetime.datetime)
     return dt.astimezone(pytz.timezone('UTC'))
 
-def getUTCnow(): # Wrapper
+def getUtcNow(): # Wrapper
     """ Wrapper to get current datetime """
     return datetime.datetime.utcnow().replace(microsecond=0).astimezone(pytz.timezone('UTC'))
 
@@ -330,7 +320,7 @@ def isWithinWindow(start, end): # Tested
     assert end.tzname()=='UTC'
     assert isinstance(end.tzinfo, type(pytz.UTC))
 
-    now = getUTCnow()
+    now = getUtcNow()
 
     if (start <= now) and (now <= end):
         return True
@@ -341,3 +331,71 @@ def isWithinWindow(start, end): # Tested
 """ Cron run check """
 def scheduletester():
     nudgelog.info('Schedueler executed.')
+
+
+
+
+""" Database functions """
+@db_session
+def updateParticipantFromPS(db, study, ps_file_path=None, ps_data=None):
+    """ Updates the database with new entries from PS JSON """
+
+    # Get data either from file or directly as a json
+    if ps_data is None:
+        assert isinstance(ps_file_path, str)
+        with open(ps_file_path, 'r') as j:
+            ps_data = json.loads(j.read())
+
+    if ps_file_path is None:
+        assert isinstance(ps_data, list)
+
+    # Add new entries to DB
+    for entry in ps_data:
+
+        # Check if participant exists
+        psId_matches = db.Participant.select(lambda part: part.psId==entry['id']).fetch()
+        assert len(psId_matches) in [0,1]
+        if len(psId_matches)==1:
+            continue
+
+        # Get trial boundary dates
+        maxTd = study.getFurthestTd() #maximum timedelta
+        start_utc = iso2utcdt(entry['date'])
+
+        participant = db.Participant(
+            psId = entry['id'],
+            study = study,
+            whenStart  =  start_utc.isoformat(),
+            whenFinish = (start_utc + maxTd).isoformat(),)
+
+        # Create completion entries for participant
+        createCompletions(participant=participant, db=db)
+
+def createCompletions(participant, db):
+    """ Creates all Completion entries in db from participant """
+
+    for tp in participant.study.timepoints:
+        db.Completion(
+            participant = participant,
+            timepoint = tp)
+
+@db_session
+def updateCompletionsFromAlchemy(db, study, alchemy_file_path=None, alchemy_data=None):
+    """ Updates the database with the new completions from Alchemer JSON """
+    pass
+
+@db_session
+def updateParticipantIsActive(db):
+    """ updates the isActive field of participant entries """
+
+    now = getUtcNow()
+    for participant in db.Participant.select().fetch():
+        if iso2utcdt(participant.whenFinish) < now:
+            participant.isActive = False
+
+@db_session
+def deleteInactiveParticipants(db):
+    """ delete participants (and belonging Completion entities) where isActive=False """
+
+    for participant in db.Participant.select(lambda p: p.isActive is False).fetch():
+        participant.delete()
