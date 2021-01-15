@@ -329,15 +329,13 @@ def isWithinWindow(start, end): # Tested
 
 
 """ Cron run check """
-def scheduletester():
+def scheduleTester():
     nudgelog.info('Schedueler executed.')
 
 
-
-
 """ Database functions """
-@db_session
-def updateParticipantFromPS(db, study, ps_file_path=None, ps_data=None):
+@db_session # tested
+def updateParticipant(db, study, ps_file_path=None, ps_data=None):
     """ Updates the database with new entries from PS JSON """
 
     # Get data either from file or directly as a json
@@ -369,9 +367,10 @@ def updateParticipantFromPS(db, study, ps_file_path=None, ps_data=None):
             whenFinish = (start_utc + maxTd).isoformat(),)
 
         # Create completion entries for participant
-        createCompletions(participant=participant, db=db)
+        createCompletion(participant=participant, db=db)
 
-def createCompletions(participant, db):
+# tested
+def createCompletion(db, participant):
     """ Creates all Completion entries in db from participant """
 
     for tp in participant.study.timepoints:
@@ -379,21 +378,122 @@ def createCompletions(participant, db):
             participant = participant,
             timepoint = tp)
 
-@db_session
-def updateCompletionsFromAlchemy(db, study, alchemy_file_path=None, alchemy_data=None):
-    """ Updates the database with the new completions from Alchemer JSON """
-    pass
+@db_session # tested
+def updateIndepStudyComp(db, timepoint, alchemy_file_path=None, alchemy_data=None):
+    """ Updates the database with the new completions from Alchemer JSON for independent studies """
 
-@db_session
+    assert timepoint.study.type.type=='indep'
+
+    # Get data either from file or directly as a json
+    if alchemy_data is None:
+        assert isinstance(alchemy_file_path, str)
+        with open(alchemy_file_path, 'r') as j:
+            alchemy_data = json.loads(j.read())
+
+    if alchemy_file_path is None:
+        assert isinstance(alchemy_data, list)
+
+    for response in alchemy_data['data']:
+
+        psId = getResponseSguid(response)
+        if psId is None:
+            continue
+
+        isComplete = assessIsComplete(response=response, timepoint=timepoint)
+
+        completion = db.Completion.select(lambda c:
+            c.participant.psId==psId and
+            c.timepoint==timepoint).fetch()
+
+        if len(completion)!=1:
+            continue
+
+        completion[0].isComplete = isComplete
+
+@db_session # tested
+def updateStackStudyComp(db, study, alchemy_file_path=None, alchemy_data=None):
+    """ Updates the database with the new completions from Alchemer JSON for stacked studies """
+
+    assert study.type.type=='stack'
+
+    # Get data either from file or directly as a json
+    if alchemy_data is None:
+        assert isinstance(alchemy_file_path, str)
+        with open(alchemy_file_path, 'r') as j:
+            alchemy_data = json.loads(j.read())
+
+    if alchemy_file_path is None:
+        assert isinstance(alchemy_data, list)
+
+    # Update data file
+    for response in alchemy_data['data']:
+
+        psId = getResponseSguid(response)
+        if psId is None:
+            continue
+
+        for tp in study.timepoints:
+
+            isComplete = assessIsComplete(response=response, timepoint=tp)
+
+            completion = db.Completion.select(lambda c:
+                c.participant.psId==psId and
+                c.timepoint==tp).fetch()
+
+            if len(completion)!=1:
+                continue
+
+            completion[0].isComplete = isComplete
+
+def assessIsComplete(response, timepoint):
+    """ decides wheter timepint is completed """
+
+    isStarted  = 'answer' in response['survey_data'][str(timepoint.firstQID)].keys() # answer key exists iff answer was given
+    isFinished = 'answer' in response['survey_data'][str(timepoint.lastQID)].keys()
+    isComplete = None
+
+    if (isStarted is False) and (isFinished is False):
+        isComplete = False
+    if (isStarted is True) and (isFinished is False):
+        isComplete = False
+    if (isStarted is False) and (isFinished is True):
+        isComplete = False
+    if (isStarted is True) and (isFinished is True):
+        isComplete = True
+
+    assert isinstance(isComplete, bool)
+    return isComplete
+
+@db_session # tested
+def updateCompletionIsNeeded(db):
+    """ updates the isNeeded attribute of Completion entries """
+
+    now = getUtcNow()
+    for completion in db.Completion.select().fetch():
+
+        expStartDtUtc = iso2utcdt(completion.participant.whenStart) # start of the experiment
+        startDtUtc = expStartDtUtc + completion.timepoint.td2start # start of the timepoint
+        finishDtUtc = startDtUtc + completion.timepoint.td2end # end of the tmepoint
+
+        if (finishDtUtc > now):
+            completion.isNeeded = False
+
+        if (startDtUtc < now):
+            completion.isNeeded = False
+
+        if (finishDtUtc > now) and (startDtUtc < now):
+            completion.isNeeded = True
+
+@db_session # tested
 def updateParticipantIsActive(db):
-    """ updates the isActive field of participant entries """
+    """ updates the isActive attribute of Participant entries """
 
     now = getUtcNow()
     for participant in db.Participant.select().fetch():
         if iso2utcdt(participant.whenFinish) < now:
             participant.isActive = False
 
-@db_session
+@db_session # tested
 def deleteInactiveParticipants(db):
     """ delete participants (and belonging Completion entities) where isActive=False """
 

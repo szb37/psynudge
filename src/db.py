@@ -122,7 +122,7 @@ class Completion(db.Entity):
     participant = Required(Participant)
     timepoint = Required(Timepoint)
     isComplete = Required(bool, default=False)
-    needComplete = Required(bool, default=False)
+    isNeeded = Required(bool, default=False)
 
 
 def getDb(db=db, filepath=os.path.join(base_dir, 'nudges.sqlite'), create_db=False):

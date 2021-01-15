@@ -24,6 +24,7 @@ def getMockDb():
         )
         indep_tp1 = psynudge.db.Timepoint(
             study = indep_mock_study,
+            name = 'indep_tp1',
             surveyId = 90288073,
             firstQID = 2,
             lastQID = 18,
@@ -33,6 +34,7 @@ def getMockDb():
         )
         indep_tp2 = psynudge.db.Timepoint(
             study = indep_mock_study,
+            name = 'indep_tp2',
             surveyId = 90289410,
             firstQID = 7,
             lastQID = 19,
@@ -49,6 +51,7 @@ def getMockDb():
         )
         stack_tp1 = psynudge.db.Timepoint(
             study = stack_mock_study,
+            name = 'stack_tp1',
             surveyId = 90286853,
             firstQID = 2,
             lastQID = 18,
@@ -59,6 +62,7 @@ def getMockDb():
         )
         stack_tp2 = psynudge.db.Timepoint(
             study = stack_mock_study,
+            name = 'stack_tp2',            
             surveyId = 90286853,
             firstQID = 7,
             lastQID = 19,

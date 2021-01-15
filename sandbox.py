@@ -28,8 +28,12 @@ https://survey.alchemer.eu/s3/90286853/Piping2?sguid=013&name=tester&__sgtarget=
 
 
 """ DOWNLAOD DATA OF GIVEN SURVEY """
+#indep tp1: 90288073
+#indep tp2: 90289410
+#stack: 90286853
+
 from surveygizmo import SurveyGizmo
-from psynudge import tokens
+from psynudge.src import tokens
 import json
 
 client = SurveyGizmo(api_version='v5',
@@ -39,14 +43,18 @@ client = SurveyGizmo(api_version='v5',
 
 client.config.base_url = 'https://restapi.surveygizmo.eu/'
 
-id = 90288073
+id = 90286853
 
 temp = client.api.surveyresponse.resultsperpage(value=100000).list(id)
 assert isinstance(temp, str)
 data = json.loads(temp)
 
-with open('test_data.json', 'w+') as outfile:
+with open('stack_data.json', 'w+') as outfile:
     json.dump(data, outfile)
+
+
+
+
 
 
 
