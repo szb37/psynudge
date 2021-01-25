@@ -10,7 +10,7 @@ import psynudge
 
 
 def getMockDb():
-    db = psynudge.db.getDb(filepath=':memory:', create_db=True)
+    db = psynudge.db.get_db(filepath=':memory:', create_db=True)
 
     with db_session:
         """ define study types """
@@ -62,7 +62,7 @@ def getMockDb():
         )
         stack_tp2 = psynudge.db.Timepoint(
             study = stack_mock_study,
-            name = 'stack_tp2',            
+            name = 'stack_tp2',
             surveyId = 90286853,
             firstQID = 7,
             lastQID = 19,

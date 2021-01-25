@@ -15,6 +15,17 @@
     ],
 
 """
+import psynudge
+db = psynudge.db.build_db()
+psynudge.controllers.updatePsData2Db(db=db)
+
+
+https://survey.alchemer.eu/s3/90288073/indep-tp1
+https://survey.alchemer.eu/s3/90289410/indep-tp2
+https://survey.alchemer.eu/s3/90286853/stacked
+
+
+
 
 https://survey.alchemer.eu/s3/90286853/Piping2?sguid=011&name=tester&__sgtarget=1
 
@@ -38,7 +49,7 @@ import json
 
 client = SurveyGizmo(api_version='v5',
                      response_type='json',
-                     api_token = tokens.api_key,
+                     api_token = tokens.sg_key,
                      api_token_secret = tokens.secret_key)
 
 client.config.base_url = 'https://restapi.surveygizmo.eu/'
@@ -97,3 +108,18 @@ def connect_db():
     filepath=os.path.join('/media/sf_vm_share', 'test.sqlite')
     db.bind(provider='sqlite', filename=filepath, create_db=False)
     db.generate_mapping(create_tables=True)
+
+
+        file_path = getDataFileName(study, tp)
+
+        # Either save new file or append to existing file
+        if os.path.isfile(file_path) is True:
+            appendData(file_path, sg_data['data'])
+
+        if os.path.isfile(file_path) is False:
+            with open(file_path, 'w+') as file:
+                json.dump(sg_data['data'], file)
+
+        # no need to iterate over tps with stack studies
+        if study.type=='stack':
+            return

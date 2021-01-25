@@ -8,16 +8,18 @@ conda env create -f environment.yml
 """
 
 from surveygizmo import SurveyGizmo
-from .tokens import api_key, secret_key
-from .db import getDb
+from .tokens import sg_key, sg_secret, ps_key, ps_secret
+from .db import get_db
 from pony.orm import db_session, commit
 import dateutil.parser
 import datetime
+import requests
 import logging
 import pytz
 import json
 import os
 
+#TODO: what happens when user changes start date
 
 src_folder = os.path.dirname(os.path.abspath(__file__))
 base_dir   = os.path.abspath(os.path.join(src_folder, os.pardir))
@@ -32,74 +34,201 @@ logging.basicConfig(
 nudgelog = logging.getLogger("nudgelog")
 nudgelog.info('Core imported.')
 
-@db_session
-def updateNudges(studies, base_dir=base_dir):
 
-    updateData(studies=studies, forceNew=False, base_dir=base_dir)
+""" Database functions """
+@db_session # tested
+def updateParticipant(db, study, ps_file_path=None, ps_data=None):
+    """ Updates the database with new entries from PS JSON """
 
-    for study in studies:
-        if study.isActive is False:
+    # Get data either from file or directly as a json
+    if ps_data is None:
+        assert isinstance(ps_file_path, str)
+        with open(ps_file_path, 'r') as j:
+            ps_data = json.loads(j.read())
+
+    if ps_file_path is None:
+        assert isinstance(ps_data, list)
+
+    # Add new entries to DB
+    for entry in ps_data:
+
+        # Check if participant exists
+        psId_matches = db.Participant.select(lambda part: part.psId==entry['id']).fetch()
+        assert len(psId_matches) in [0,1]
+        if len(psId_matches)==1:
             continue
 
-        psData, surveyData = loadStudyData(study)
+        # Get trial boundary dates
+        maxTd = study.getFurthestTd() #maximum timedelta
 
-        for user in psData:
-            userId = user['key']
-            dtStartLoc = iso2utcdt(user['date'])   # Start datetime in user's local tz
-            dtStartUTC = dt2utcdt(dtStartLOC)     # Start datetime in UTC
+        if ':' in str(entry['date']): # If : in string, then str is isoformat, if not, then unix seconds
+            start_utc = iso2utcdt(entry['date'])
+        else:
+            start_utc = iso2utcdt(datetime.datetime.fromtimestamp(entry['date']).isoformat())
 
-            for tp in study.timepoints:
+        participant = db.Participant(
+            psId = entry['id'],
+            study = study,
+            whenStart  = start_utc.isoformat(),
+            whenFinish = (start_utc + maxTd).isoformat(),)
 
-                isnudge = isNudge(userId, dtStartUTC, tp, surveyData)
-                assert isinstance(isnudge, bool)
-                if isnudge is False:
-                    continue
+        # Create completion entries for participant
+        createCompletion(participant=participant, db=db)
 
-                isnudgesent = isNudgeSent(userId, studyId, surveyId)
-                assert isinstance(isnudgesent, bool)
-                if isnudgesent is True:
-                    continue
+@db_session # tested
+def updateIndepStudyIsComplete(db, tp, alchemy_file_path=None, alchemy_data=None):
+    """ Updates the database with the new completions from Alchemer JSON for independent studies """
 
-                Nudge(
-                    userId=userId,
-                    surveyId=surveyId,
-                    studyId=studyId,
-                    isSent = False)
-                commit()
+    assert tp.study.type.type=='indep'
+
+    # Get data either from file or directly as a json
+    if alchemy_data is None:
+        assert isinstance(alchemy_file_path, str)
+        with open(alchemy_file_path, 'r') as j:
+            alchemy_data = json.loads(j.read())
+
+    if alchemy_file_path is None:
+        assert isinstance(alchemy_data, list)
+
+    for response in alchemy_data['data']:
+
+        psId = getResponseSguid(response)
+        if psId is None:
+            continue
+
+        isComplete = assessIsComplete(response=response, tp=tp)
+
+        completion = db.Completion.select(lambda c:
+            c.participant.psId==psId and
+            c.timepoint==tp).fetch()
+
+        if len(completion)!=1: # TODO: why not assert?!?!?!?!
+            continue
+
+        completion[0].isComplete = isComplete
+
+@db_session # tested
+def updateStackStudyIsComplete(db, study, alchemy_file_path=None, alchemy_data=None):
+    """ Updates the database with the new completions from Alchemer JSON for stacked studies """
+
+    assert study.type.type=='stack'
+
+    # Get data either from file or directly as a json
+    if alchemy_data is None:
+        assert isinstance(alchemy_file_path, str)
+        with open(alchemy_file_path, 'r') as j:
+            alchemy_data = json.loads(j.read())
+
+    if alchemy_file_path is None:
+        assert isinstance(alchemy_data, list)
+
+    # Update data file
+    for response in alchemy_data['data']:
+
+        psId = getResponseSguid(response)
+        if psId is None:
+            continue
+
+        for tp in study.timepoints:
+
+            isComplete = assessIsComplete(response=response, timepoint=tp)
+
+            completion = db.Completion.select(lambda c:
+                c.participant.psId==psId and
+                c.timepoint==tp).fetch()
+
+            if len(completion)!=1:
+                continue
+
+            completion[0].isComplete = isComplete
+
+@db_session # tested
+def updateCompletionIsNeeded(db):
+    """ updates the isNeeded attribute of Completion entries """
+
+    now = getUtcNow()
+    for completion in db.Completion.select().fetch():
+
+        expStartDtUtc = iso2utcdt(completion.participant.whenStart) # start of the experiment
+        startDtUtc = expStartDtUtc + completion.timepoint.td2start # start of the timepoint
+        finishDtUtc = startDtUtc + completion.timepoint.td2end # end of the tmepoint
+
+        if (finishDtUtc > now):
+            completion.isNeeded = False
+
+        if (startDtUtc < now):
+            completion.isNeeded = False
+
+        if (finishDtUtc > now) and (startDtUtc < now):
+            completion.isNeeded = True
+
+@db_session
+def updateCompletionIsNudge(db):
+    """ Updates isNudge field of Completion entries """
+
+    for completion in db.Completion.select().fetch():
+
+        if completion.participant.study.isActive is False:
+            continue
+
+        isnudge = isNudge(db=db, completion=completion)
+        assert isinstance(isnudge, bool)
+        completion.isNudge = isnudge
+
+def assessIsComplete(response, tp):
+    """ Decides whether timepoint is completed """
+
+    isStarted  = 'answer' in response['survey_data'][str(tp.firstQID)].keys() # answer key exists iff answer was given
+    isFinished = 'answer' in response['survey_data'][str(tp.lastQID)].keys()
+    isComplete = None
+
+    if (isStarted is False) and (isFinished is False):
+        isComplete = False
+    if (isStarted is True) and (isFinished is False):
+        isComplete = False
+    if (isStarted is False) and (isFinished is True):
+        isComplete = False
+    if (isStarted is True) and (isFinished is True):
+        isComplete = True
+
+    assert isinstance(isComplete, bool)
+    return isComplete
+
+def createCompletion(db, participant):
+    """ Creates all Completion entries in db from participant """
+
+    for tp in participant.study.timepoints:
+        db.Completion(
+            participant = participant,
+            timepoint = tp) # tested
+
+@db_session
+def deletePastParticipant(db):
+    """ delete participants (and belonging Completion entities) where isActive=False """
+
+    now = getUtcNow()
+    for participant in db.Participant.select().fetch():
+        if iso2utcdt(participant.whenFinish) < now:
+            participant.delete()
 
 
 """ Nudge detection """
-@db_session
-def isNudgeSent(userId, studyId, surveyId, db):
-    """ Returns True/False if the nudge was / wasnt sent already """
+def isNudge(db, completion):
+    """ Returns True if (tp is witin nudge time window) and (tp has not been completed yet) and (last nudge was sent more then 24h ago), False otherwise """
+    assert isinstance(completion, Completion)
 
-    matching_nudge = db.Nudge.select(lambda nudge:
-        nudge.userId==userId and
-        nudge.surveyId==surveyId and
-        nudge.studyId==studyId).fetch()
-
-    assert len(matching_nudge) in [0,1]
-
-    if len(matching_nudge)==0:
-        return False
-
-    if len(matching_nudge)==1:
-        assert matching_nudge[0].isSent is True
-        return True
-
-def isNudge(userId, dtStartUTC, tp, surveyData): # Tested
-    """ Returns True if tp is witin nudge time window and tp has not been completed yet, False otherwise """
-    assert isinstance(userId, str)
-    assert isinstance(dtStartUTC, datetime.datetime)
-    assert isinstance(tp, Timepoint)
-    assert isinstance(surveyData, list)
-
+    # Check if we are within Nudge time window
+    dtStartUTC = iso2utcdt(completion.participant.whenStart)
     isWithinNW = isWithinNudgeWindow(dtStartUTC, tp)
     if isWithinNW is False:
         return False
 
-    isComp = isCompleted(userId, surveyData)
-    if isComp is True:
+    # Check if completed already
+    if completion.isComplete is True:
+        return False
+
+    isnudgetimely = isNudgeTimely(completion=completion)
+    if isnudgetimely is False:
         return False
 
     return True
@@ -113,172 +242,105 @@ def isWithinNudgeWindow(dtStartUTC, tp): # Tested
     end   = dtStartUTC + (tp.td2start + tp.td2end + tp.td2nudge)
     return isWithinWindow(start, end)
 
+def isNudgeTimely(completion):
+    """ Returns True if last nudge was sent > 23:50h ago, False otherwise """
 
-""" Survey data exploration """
-def isCompleted(userId, surveyData, firstQID=None, lastQID=None): # Tested
-    """ Checks whether user has entry in surveyData """
+    dtNow = getUtcNow()
+    dtlastNudgeSend = iso2utcdt(completion.lastNudgeSend)
 
-    assert isinstance(userId, str)
-    assert isinstance(surveyData, list)
-    assert isinstance(firstQID, int)
-    assert isinstance(lastQID, int)
-
-    responseFound = False
-    for response in surveyData:
-        sguid=getResponseSguid(response)
-        if sguid==userId:
-            responseFound = True
-            break
-
-    if responseFound is False:
-        return False # Response with SGUID not found
-
-    isStarted  = 'answer' in response['survey_data'][str(firstQID)].keys() # answer key exists iff answer was given
-    isFinished = 'answer' in response['survey_data'][str(lastQID)].keys()
-
-    if (isStarted is False) and (isFinished is False):
-        return False
-    if (isStarted is True) and (isFinished is False):
-        return False
-    if (isStarted is False) and (isFinished is True):
-        assert False
-    if (isStarted is True) and (isFinished is True):
+    if (dtNow - dtlastNudgeSend) > datetime.timedelta(days=0.95): # 0.95 instead of 1 for error tolerance
         return True
 
-    assert False
-
-def getResponseSguid(response):
-    """ Returns SGUID of a response. The SGUID can be recorded either as hidden or URL variable, code checks both """
-
-    sguid_url    = None
-    sguid_hidden = None
-
-    for key, value in response['survey_data'].items():
-        if value['question']=='Capture SGUID':
-            if value['shown'] is True:
-                sguid_hidden = value['answer']
-
-    try:
-        sguid_url = response['url_variables']['sguid']['value']
-    except:
-        pass
-
-    if isinstance(sguid_url, str) and isinstance(sguid_hidden, str):
-        assert(sguid_url==sguid_hidden)
-        return sguid_url
-    elif isinstance(sguid_url, str) and sguid_hidden is None:
-        return sguid_url
-    elif sguid_url is None and isinstance(sguid_hidden, str):
-        return sguid_hidden
-    elif sguid_url is None and sguid_hidden is None:
-        assert False
+    return False
 
 
-"""  Disk data manipulations """
-def updateData(studies, forceNew=False, base_dir=base_dir):
-    """ Updates data from SG """
+""" Data acess and archieve """
+def getPsData(study, base_dir=base_dir):
+    """ Updates participant info from PS """
 
-    lastCheck = readLastCheckTime(base_dir=base_dir)
+    response = requests.get('https://dashboard-api.psychedelicsurvey.com/v2/studies/{}/participants'.format(study.psId),
+     headers={
+        'ClientSecret': ps_secret,
+        'ClientID': ps_key,
+         }
+    )
 
-    for study in studies:
-        if study.isActive is False:
-            continue
+    assert response.status_code==200
+    return response.json()
 
-    getData(study, forceNew=False, lastCheck=None, base_dir=base_dir)
-    writeLastCheckTime(base_dir=base_dir)
-
-def getData(study, forceNew=False, lastCheck=None, base_dir=base_dir):
+def getSgData(study, tp=None, forceNew=False, lastSgCheck=None):
     """ Download SG data save """
 
+    if tp is None:
+        assert study.type=='stack'
+    else:
+        assert study.type=='indep'
+
     assert isinstance(forceNew, bool)
-    assert (lastCheck is None) or isinstance(last_check, str)
-    if forceNew is True:
-        assert lastCheck is None
+    assert isinstance(lastSgCheck, str)
 
     client = SurveyGizmo(api_version='v5',
                          response_type='json',
-                         api_token = api_key,
-                         api_token_secret = secret_key)
+                         api_token = sg_key,
+                         api_token_secret = sg_secret)
     client.config.base_url = 'https://restapi.surveygizmo.eu/'
     tps = list(set(study.tps))
 
-    for tp in tps:
+    if (lastSgCheck is None) or (forceNew is True):
+        temp = client.api.surveyresponse.resultsperpage(value=100000).list(tp.surveyId)
+    else:
+        temp = client.api.surveyresponse.filter(
+            field    = 'date_submitted',
+            operator = '<',
+            value    = lastSgCheck).resultsperpage(value=100000).list(tp.surveyId)
 
-        if (lastCheck is None) or (forceNew is True):
-            temp = client.api.surveyresponse.resultsperpage(value=100000).list(tp.surveyId)
-        else:
-            temp = client.api.surveyresponse.filter(
-                field    = 'date_submitted',
-                operator = '<',
-                value    = last_check).resultsperpage(value=100000).list(tp.surveyId)
+    sg_data = json.loads(temp)
+    assert sg_data['total_pages']==1
+    assert sg_data['result_ok'] is True
 
-        assert isinstance(temp, str)
+    nudgelog.info('SG data downloaded, study:{}, tp{}:.'.format(study.name, tp.name))
 
-        sg_data = json.loads(temp)
-        assert sg_data['total_pages']==1
-        assert sg_data['result_ok'] is True
-        nudgelog.info('Data successfully acquired form SG.')
+    return sg_data
 
-        file_path = getDataFileName(study, tp)
+def getDataFilePath(study, tp=None, source=None, base_dir=base_dir):
+    """ Return the intended filepath when data files are saved """
 
-        # Either save new file or append to existing file
-        if os.path.isfile(file_path) is True:
-            appendData(file_path, sg_data['data'])
+    base_dir='/home/bazsi'
+    assert source in ['sg', 'ps']
 
-        if os.path.isfile(file_path) is False:
-            with open(file_path, 'w+') as file:
-                json.dump(sg_data['data'], file)
+    if (source=='ps'):
+        assert tp is None
+        return os.path.join(base_dir, "data/{}_{}_to({}).json".format(
+            study.name,
+            'ps',
+            getUtcNow().isoformat()[:-6]
+            ))
 
-        # no need to iterate over tps with stack studies
-        if study.type=='stack':
-            return
+    if (source=='sg') and (study.type=='stack'):
+        return os.path.join(base_dir, "data/{}_{}_{}_from({})_to({}).json".format(
+            study.name,
+            'sg',
+            'stack',
+            study.timepoints.select().first().  lastSgCheck[:-6],
+            getUtcNow().isoformat()[:-6]
+            ))
 
-def loadStudyData(study): # WIP
+    if (source=='sg') and (study.type=='indep'):
+        return os.path.join(base_dir, "data/{}_{}_{}_from({})_to({}).json".format(
+            study.name,
+            'sg',
+            tp.name,
+            tp.lastSgCheck[:-6],
+            getUtcNow().isoformat()[:-6]
+            ))
 
-    psData = get_ps_data(study)
-    getData(study=study, lastCheck=None)
-    surveyData = read_sg_data()
+    assert False
 
-    return psData, surveyData
-
-def appendData(file_path, data): # Tested
-
-    assert isinstance(data, list)
-
-    with open(file_path, 'r') as file:
-        file_data = json.load(file)
-        assert isinstance(file_data, list)
-
-    for element in data:
-        file_data.append(element)
-
-    with open(file_path, 'w+') as file:
-        json.dump(file_data, file)
-
-def getDataFileName(study, tp, base_dir=base_dir): # Tested
-
-    if study.type=='stack':
-        return os.path.join(base_dir, "data/{}_{}.json".format(study.name, 'stack'))
-
-    if study.type=='indep':
-        return os.path.join(base_dir, "data/{}_{}.json".format(study.name, tp.name))
-
-def writeLastCheckTime(base_dir=base_dir): # Tested
-    """ Updates last_time_checked.txt, which contains the isostring datetime for the last time the nuddger was run (in UTC) """
-
-    now = getUtcNow()
-    file_path = os.path.join(base_dir, 'last_time_checked.txt')
-    with open(file_path, 'w+') as file:
-        file.write(now.isoformat())
-
-def readLastCheckTime(base_dir=base_dir): # Tested
-    """ Reads and returns last_time_checked.txt, which contains the isostring datetime for the last time the nuddger was run (in UTC) """
-
-    file_path = os.path.join(base_dir, 'last_time_checked.txt')
-    with open(file_path, 'r') as file:
-        now_str = file.readline()
-    assert len(now_str)==25
-    return now_str
+def saveData(data, filepath):
+    """ Saves data locally """
+    #import pdb; pdb.set_trace()
+    with open(filepath, 'w+') as file:
+        json.dump(data, file)
 
 
 """ Datetime manipulations """
@@ -331,171 +393,3 @@ def isWithinWindow(start, end): # Tested
 """ Cron run check """
 def scheduleTester():
     nudgelog.info('Schedueler executed.')
-
-
-""" Database functions """
-@db_session # tested
-def updateParticipant(db, study, ps_file_path=None, ps_data=None):
-    """ Updates the database with new entries from PS JSON """
-
-    # Get data either from file or directly as a json
-    if ps_data is None:
-        assert isinstance(ps_file_path, str)
-        with open(ps_file_path, 'r') as j:
-            ps_data = json.loads(j.read())
-
-    if ps_file_path is None:
-        assert isinstance(ps_data, list)
-
-    # Add new entries to DB
-    for entry in ps_data:
-
-        # Check if participant exists
-        psId_matches = db.Participant.select(lambda part: part.psId==entry['id']).fetch()
-        assert len(psId_matches) in [0,1]
-        if len(psId_matches)==1:
-            continue
-
-        # Get trial boundary dates
-        maxTd = study.getFurthestTd() #maximum timedelta
-        start_utc = iso2utcdt(entry['date'])
-
-        participant = db.Participant(
-            psId = entry['id'],
-            study = study,
-            whenStart  =  start_utc.isoformat(),
-            whenFinish = (start_utc + maxTd).isoformat(),)
-
-        # Create completion entries for participant
-        createCompletion(participant=participant, db=db)
-
-# tested
-def createCompletion(db, participant):
-    """ Creates all Completion entries in db from participant """
-
-    for tp in participant.study.timepoints:
-        db.Completion(
-            participant = participant,
-            timepoint = tp)
-
-@db_session # tested
-def updateIndepStudyComp(db, timepoint, alchemy_file_path=None, alchemy_data=None):
-    """ Updates the database with the new completions from Alchemer JSON for independent studies """
-
-    assert timepoint.study.type.type=='indep'
-
-    # Get data either from file or directly as a json
-    if alchemy_data is None:
-        assert isinstance(alchemy_file_path, str)
-        with open(alchemy_file_path, 'r') as j:
-            alchemy_data = json.loads(j.read())
-
-    if alchemy_file_path is None:
-        assert isinstance(alchemy_data, list)
-
-    for response in alchemy_data['data']:
-
-        psId = getResponseSguid(response)
-        if psId is None:
-            continue
-
-        isComplete = assessIsComplete(response=response, timepoint=timepoint)
-
-        completion = db.Completion.select(lambda c:
-            c.participant.psId==psId and
-            c.timepoint==timepoint).fetch()
-
-        if len(completion)!=1:
-            continue
-
-        completion[0].isComplete = isComplete
-
-@db_session # tested
-def updateStackStudyComp(db, study, alchemy_file_path=None, alchemy_data=None):
-    """ Updates the database with the new completions from Alchemer JSON for stacked studies """
-
-    assert study.type.type=='stack'
-
-    # Get data either from file or directly as a json
-    if alchemy_data is None:
-        assert isinstance(alchemy_file_path, str)
-        with open(alchemy_file_path, 'r') as j:
-            alchemy_data = json.loads(j.read())
-
-    if alchemy_file_path is None:
-        assert isinstance(alchemy_data, list)
-
-    # Update data file
-    for response in alchemy_data['data']:
-
-        psId = getResponseSguid(response)
-        if psId is None:
-            continue
-
-        for tp in study.timepoints:
-
-            isComplete = assessIsComplete(response=response, timepoint=tp)
-
-            completion = db.Completion.select(lambda c:
-                c.participant.psId==psId and
-                c.timepoint==tp).fetch()
-
-            if len(completion)!=1:
-                continue
-
-            completion[0].isComplete = isComplete
-
-def assessIsComplete(response, timepoint):
-    """ decides wheter timepint is completed """
-
-    isStarted  = 'answer' in response['survey_data'][str(timepoint.firstQID)].keys() # answer key exists iff answer was given
-    isFinished = 'answer' in response['survey_data'][str(timepoint.lastQID)].keys()
-    isComplete = None
-
-    if (isStarted is False) and (isFinished is False):
-        isComplete = False
-    if (isStarted is True) and (isFinished is False):
-        isComplete = False
-    if (isStarted is False) and (isFinished is True):
-        isComplete = False
-    if (isStarted is True) and (isFinished is True):
-        isComplete = True
-
-    assert isinstance(isComplete, bool)
-    return isComplete
-
-@db_session # tested
-def updateCompletionIsNeeded(db):
-    """ updates the isNeeded attribute of Completion entries """
-
-    now = getUtcNow()
-    for completion in db.Completion.select().fetch():
-
-        expStartDtUtc = iso2utcdt(completion.participant.whenStart) # start of the experiment
-        startDtUtc = expStartDtUtc + completion.timepoint.td2start # start of the timepoint
-        finishDtUtc = startDtUtc + completion.timepoint.td2end # end of the tmepoint
-
-        if (finishDtUtc > now):
-            completion.isNeeded = False
-
-        if (startDtUtc < now):
-            completion.isNeeded = False
-
-        if (finishDtUtc > now) and (startDtUtc < now):
-            completion.isNeeded = True
-
-@db_session # tested
-def updateParticipantIsActive(db):
-    """ updates the isActive attribute of Participant entries """
-
-    now = getUtcNow()
-    for participant in db.Participant.select().fetch():
-        if iso2utcdt(participant.whenFinish) < now:
-            participant.isActive = False
-
-@db_session # tested
-def deleteInactiveParticipants(db):
-    """ delete participants (and belonging Completion entities) where isActive=False """
-
-    for participant in db.Participant.select(lambda p: p.isActive is False).fetch():
-        participant.delete()

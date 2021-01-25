@@ -6,9 +6,8 @@
 python -m pytest psynudge/tests/
 """
 
-
-from unittest import mock
 from pony.orm import db_session
+from unittest import mock
 import dateutil.parser
 import datetime
 import psynudge
@@ -18,34 +17,14 @@ import pytz
 import json
 import os
 
+
 test_dir = os.path.dirname(os.path.abspath(__file__))
 
-#    tp = db.Timepoint(
-#        name='test',
-#        surveyId='000',
-#        td2start=datetime.timedelta(days=6),
-#        td2end=datetime.timedelta(days=1),
-#        td2nudge=datetime.timedelta(days=1),)
 
 class DatetimeTests(unittest.TestCase):
     """ Tests for datetime manipulations """
 
     dtStartUTC = dateutil.parser.parse("2020-01-10T00:00:00Z").astimezone(pytz.timezone('UTC'))
-
-    def test_iso2utcdt(self):
-
-        dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00Z')
-        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00Z').astimezone(pytz.timezone('UTC')))
-
-        dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00+00:00')
-        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00Z').astimezone(pytz.timezone('UTC')))
-
-        dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00+02:00')
-        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00+02:00').astimezone(pytz.timezone('UTC')))
-
-        dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00-03:00')
-        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00-03:00').astimezone(pytz.timezone('UTC')))
-
 
     def test_iso2dt(self):
 
@@ -64,6 +43,20 @@ class DatetimeTests(unittest.TestCase):
         dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00-03:00')
         self.assertEqual(dt_loc.astimezone(pytz.timezone('UTC')), dt_utc)
         self.assertEqual(dt_loc.astimezone(pytz.timezone('UTC')), dateutil.parser.parse('2020-01-10T00:00:00-03:00').astimezone(pytz.timezone('UTC')))
+
+    def test_iso2utcdt(self):
+
+        dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00Z')
+        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00Z').astimezone(pytz.timezone('UTC')))
+
+        dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00+00:00')
+        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00Z').astimezone(pytz.timezone('UTC')))
+
+        dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00+02:00')
+        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00+02:00').astimezone(pytz.timezone('UTC')))
+
+        dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00-03:00')
+        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00-03:00').astimezone(pytz.timezone('UTC')))
 
     @mock.patch('psynudge.src.core.getUtcNow')
     def test_isWithinWindow(self, mock):
@@ -106,10 +99,14 @@ class DatetimeTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             self.assertTrue(psynudge.core.isWithinWindow(start, end))
 
+
 class DatabaseTests(unittest.TestCase):
 
     db = mock_db.getMockDb() # wo participant, just studys and timepoints
+    import pdb; pdb.set_trace()
 
+
+    #@unittest.skip('wip')
     @db_session
     def test_updateParticipant_fromFile(self, db=db):
 
@@ -144,6 +141,7 @@ class DatabaseTests(unittest.TestCase):
 
         db.rollback()
 
+    @unittest.skip('wip')
     @db_session
     def test_updateParticipant_fromJson(self, db=db):
         """ besides the update test, this test also contains tests for duplicate participants """
@@ -221,6 +219,7 @@ class DatabaseTests(unittest.TestCase):
 
         db.rollback()
 
+    @unittest.skip('wip')
     @db_session
     def test_deleteInactiveParticipants(self, db=db):
 
@@ -246,6 +245,7 @@ class DatabaseTests(unittest.TestCase):
 
         db.rollback()
 
+    @unittest.skip('wip')
     @db_session
     @mock.patch('psynudge.src.core.getUtcNow')
     def test_updateParticipantIsActive(self, mock, db=db):
@@ -271,6 +271,7 @@ class DatabaseTests(unittest.TestCase):
 
         db.rollback()
 
+    @unittest.skip('wip')
     @db_session
     @mock.patch('psynudge.src.core.getUtcNow')
     def test_updateCompletionIsNeeded(self, mock, db=db):
@@ -313,8 +314,9 @@ class DatabaseTests(unittest.TestCase):
 
         db.rollback()
 
+    @unittest.skip('wip')
     @db_session
-    def test_updateIndepStudyComp(self, db=db):
+    def test_updateIndepStudyIsComplete(self, db=db):
 
         """
         https://survey.alchemer.eu/s3/90288073/indep-tp1?sguid=001 # Did not start
@@ -337,7 +339,7 @@ class DatabaseTests(unittest.TestCase):
         # Add completions for tp1
         tp1 = db.Timepoint.select(lambda tp: tp.name=='indep_tp1').first()
         fp = os.path.join(test_dir, 'fixtures', 'indep_tp1.json')
-        psynudge.core.updateIndepStudyComp(db=db, timepoint=tp1, alchemy_file_path=fp)
+        psynudge.core.updateIndepStudyIsComplete(db=db, timepoint=tp1, alchemy_file_path=fp)
 
         self.assertEqual(db.Completion.select().count(), 18)
         self.assertEqual(db.Completion.select(lambda c: c.isComplete is True).count(), 1)
@@ -352,7 +354,7 @@ class DatabaseTests(unittest.TestCase):
         # Add completions for tp2
         tp2 = db.Timepoint.select(lambda tp: tp.name=='indep_tp2').first()
         fp = os.path.join(test_dir, 'fixtures', 'indep_tp2.json')
-        psynudge.core.updateIndepStudyComp(db=db, timepoint=tp2, alchemy_file_path=fp)
+        psynudge.core.updateIndepStudyIsComplete(db=db, timepoint=tp2, alchemy_file_path=fp)
 
         self.assertEqual(db.Completion.select().count(), 18)
         self.assertEqual(db.Completion.select(lambda c: c.isComplete is True).count(), 2)
@@ -366,8 +368,9 @@ class DatabaseTests(unittest.TestCase):
 
         db.rollback()
 
+    @unittest.skip('wip')
     @db_session
-    def test_updateStackStudyComp(self, db=db):
+    def test_updateStackStudyIsComplete(self, db=db):
 
         """
         https://survey.alchemer.eu/s3/90286853/stack?sguid=001                # Did not do
@@ -395,7 +398,7 @@ class DatabaseTests(unittest.TestCase):
         study = db.Study.select(lambda s: s.name=='stack_test').first()
         stack_tp1 = db.Timepoint.select(lambda tp: tp.name=='stack_tp1').first()
         stack_tp2 = db.Timepoint.select(lambda tp: tp.name=='stack_tp2').first()
-        psynudge.core.updateStackStudyComp(db=db, study=study, alchemy_file_path=fp)
+        psynudge.core.updateStackStudyIsComplete(db=db, study=study, alchemy_file_path=fp)
 
         # Check if completions are correct
         self.assertFalse(
@@ -475,16 +478,16 @@ class PreRefactoringTests(unittest.TestCase):
     def test_readWriteLastTimeCheck(self, mock):
 
         mock.return_value = dateutil.parser.parse("2020-01-10T00:00:00Z").astimezone(pytz.timezone('UTC'))
-        psynudge.core.writeLastCheckTime()
-        lastTimeStr = psynudge.core.readLastCheckTime()
+        psynudge.core.writelastSgCheckTime()
+        lastTimeStr = psynudge.core.readlastSgCheckTime()
         self.assertEqual(lastTimeStr, '2020-01-10T00:00:00+00:00')
         self.assertEqual(
             dateutil.parser.parse("2020-01-10T00:00:00Z").astimezone(pytz.timezone('UTC')),
             dateutil.parser.parse(lastTimeStr))
 
         mock.return_value = dateutil.parser.parse("3020-01-10T06:07:55Z").astimezone(pytz.timezone('UTC'))
-        psynudge.core.writeLastCheckTime()
-        lastTimeStr = psynudge.core.readLastCheckTime()
+        psynudge.core.writelastSgCheckTime()
+        lastTimeStr = psynudge.core.readlastSgCheckTime()
         self.assertEqual(lastTimeStr, '3020-01-10T06:07:55+00:00')
         self.assertEqual(
             dateutil.parser.parse("3020-01-10T06:07:55Z").astimezone(pytz.timezone('UTC')),
@@ -702,24 +705,24 @@ class PreRefactoringTests(unittest.TestCase):
             psynudge.core.getResponseSguid(response)
 
     @unittest.skip('wip')
-    def test_isNudgeSent(self):
+    def test_islastNudgeSend(self):
 
-        test_db = psynudge.db.getDb(filepath=':memory:', create_db=True)
+        test_db = psynudge.db.get_db(filepath=':memory:', create_db=True)
 
         with db_session:
             test_db.Nudge(userId='1', studyId='2', surveyId='3', isSent=True)
             test_db.Nudge(userId='2', studyId='3', surveyId='4', isSent=True)
             test_db.Nudge(userId='3', studyId='4', surveyId='5', isSent=False)
 
-        self.assertFalse(psynudge.core.isNudgeSent(userId='9', studyId='9', surveyId='9', db=test_db))
-        self.assertTrue(psynudge.core.isNudgeSent(userId='1', studyId='2', surveyId='3', db=test_db))
-        self.assertTrue(psynudge.core.isNudgeSent(userId='2', studyId='3', surveyId='4', db=test_db))
+        self.assertFalse(psynudge.core.islastNudgeSend(userId='9', studyId='9', surveyId='9', db=test_db))
+        self.assertTrue(psynudge.core.islastNudgeSend(userId='1', studyId='2', surveyId='3', db=test_db))
+        self.assertTrue(psynudge.core.islastNudgeSend(userId='2', studyId='3', surveyId='4', db=test_db))
 
         with self.assertRaises(AssertionError):
-            psynudge.core.isNudgeSent(userId='3', studyId='4', surveyId='5', db=test_db)
+            psynudge.core.islastNudgeSend(userId='3', studyId='4', surveyId='5', db=test_db)
 
         with db_session:
             test_db.Nudge(userId='1', studyId='2', surveyId='3', isSent=True)
 
         with self.assertRaises(AssertionError):
-            psynudge.core.isNudgeSent(userId='1', studyId='2', surveyId='3', db=test_db)
+            psynudge.core.islastNudgeSend(userId='1', studyId='2', surveyId='3', db=test_db)
