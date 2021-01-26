@@ -38,10 +38,7 @@ def updateSgData2Db(db, save=True, forceNew=False):
 
         if study.type=='stack':
             alchemy_data = getSgData(study=study, forceNew=forceNew)
-            updateStackStudyIsComplete(db=db, study=study, alchemy_data=alchemy_data)
-
-            for tp in study.timepoints:
-                tp.lastSgCheck = getUtcNow().isoformat()
+            updateIsCompleteStack(db=db, study=study, alchemy_data=alchemy_data)
 
             if save:
                 filepath = getDataFilePath(study=study, source='ps')
@@ -50,15 +47,11 @@ def updateSgData2Db(db, save=True, forceNew=False):
         if study.type=='indep':
             for tp in study.timepoints:
                 alchemy_data = getSgData(study=study, tp=tp, forceNew=forceNew)
-                updateIndepStudyIsComplete(db=db, study=study, timepoint=tp, alchemy_data=alchemy_data)
-                tp.lastSgCheck = getUtcNow().isoformat()
+                updateIsCompleteIndep(db=db, study=study, timepoint=tp, alchemy_data=alchemy_data)
 
                 if save:
                     filepath = getDataFilePath(study=study, tp=tp, source='sg')
                     saveData(ps_data, filepath)
-
-    updateCompletionIsNeeded(db=db)
-    updateCompletionIsNudge(db=db)
 
 def sendNudges(db):
     """ Checks the status of """

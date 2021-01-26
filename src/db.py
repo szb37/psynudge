@@ -6,6 +6,7 @@ Define sqlite DB structure which represents teh studies and surveys
 """
 
 from pony.orm import *
+from .dt_funcs import *
 import datetime
 import os
 
@@ -112,12 +113,70 @@ class Completion(db.Entity):
     id = PrimaryKey(int, auto=True)
     participant = Required(Participant)
     timepoint = Required(Timepoint)
-    isNudge = Required(bool, default=False)
-    isComplete = Required(bool, default=False)
-    isNeeded = Required(bool, default=False)
-    isNudgeTimely = Required(bool, default=False)
-    lastNudgeSend = Optional(str, default='2020-01-10T00:00:00+00:00') # in UTC
+    isComplete = Required(bool, default=False) # is the timepoint completed
+    lastNudgeSend = Optional(str, default='2020-01-01T00:00:00+00:00') # in UTC
+    #isNudge = Required(bool, default=False)
+    #isPastCompletion = Required(bool, default=False) # should the timpoint be completed already
+    #isNudgeTimely = Required(bool, default=False) # did at least 23h past since last nudge
 
+    def isPastCompletion(self): # Tested
+        """ Returns True if completion is expected, False if before / after time completion window """
+
+        now = getUtcNow()
+        expStartDtUtc = iso2utcdt(self.participant.whenStart) # start of the experiment
+        startDtUtc = expStartDtUtc + self.timepoint.td2start  # start of the timepoint
+        finishDtUtc = startDtUtc + self.timepoint.td2end      # end of the tmepoint
+
+        if finishDtUtc <= now:
+            return True
+
+        return False
+
+    def isWithinNudgeWindow(self): #Imp tested
+        """ Checks if now is within nudge time window of user and tp """
+
+        tp = self.timepoint
+        dtStartUTC = iso2utcdt(self.participant.whenStart)
+
+        start = dtStartUTC + (tp.td2start + tp.td2end)
+        end   = dtStartUTC + (tp.td2start + tp.td2end + tp.td2nudge)
+
+        return isWithinTimeWindow(start, end)
+
+    def isNudgeTimely(self): #Tested
+        """ Returns True if last nudge was sent > 23:50h ago, False otherwise """
+
+        dtNow = getUtcNow()
+        dtlastNudgeSend = iso2utcdt(self.lastNudgeSend)
+        assert dtNow > dtlastNudgeSend
+
+        if (dtNow - dtlastNudgeSend) > datetime.timedelta(days=0.985): # 0.985 instead of 1 for error tolerance ~23:38
+            return True
+
+        return False
+
+    def isNudge(self): #Tested
+        """ Returns True if
+            -(tp is witin nudge time window) and
+            -(tp has not been completed yet) and
+            -(last nudge was sent more then 24h ago),
+
+            False otherwise
+        """
+
+        # Check if completed already
+        if self.isComplete is True:
+            return False
+
+        # Check if we are within nudge time window
+        if self.isWithinNudgeWindow() is False:
+            return False
+
+        # Check if last nudge was sent within 23.5 hours
+        if self.isNudgeTimely() is False:
+            return False
+
+        return True
 
 def get_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), create_db=False):
     """ Returns existing sqlite database"""

@@ -20,59 +20,7 @@ test_dir = os.path.dirname(os.path.abspath(__file__))
 db = psynudge.db.build_db(filepath=':memory:', create_db=True) # DB wo participant, just studys and timepoints
 
 
-class DatetimeTests(unittest.TestCase):
-    """ Tests for datetime manipulations """
-
-    dtStartUTC = dateutil.parser.parse("2020-01-10T00:00:00Z").astimezone(pytz.timezone('UTC'))
-
-    def test_iso2dt(self):
-
-        dt_loc = psynudge.core.iso2dt('2020-01-10T00:00:00Z')
-        self.assertEqual(dt_loc, dateutil.parser.parse('2020-01-10T00:00:00Z').astimezone(pytz.timezone('UTC')))
-
-        dt_loc = psynudge.core.iso2dt('2020-01-10T00:00:00+00:00')
-        self.assertEqual(dt_loc, dateutil.parser.parse('2020-01-10T00:00:00Z').astimezone(pytz.timezone('UTC')))
-
-        dt_loc = psynudge.core.iso2dt('2020-01-10T00:00:00+02:00')
-        dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00+02:00')
-        self.assertEqual(dt_loc.astimezone(pytz.timezone('UTC')), dt_utc)
-        self.assertEqual(dt_loc.astimezone(pytz.timezone('UTC')), dateutil.parser.parse('2020-01-10T00:00:00+02:00').astimezone(pytz.timezone('UTC')))
-
-        dt_loc = psynudge.core.iso2dt('2020-01-10T00:00:00-03:00')
-        dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00-03:00')
-        self.assertEqual(dt_loc.astimezone(pytz.timezone('UTC')), dt_utc)
-        self.assertEqual(dt_loc.astimezone(pytz.timezone('UTC')), dateutil.parser.parse('2020-01-10T00:00:00-03:00').astimezone(pytz.timezone('UTC')))
-
-    def test_iso2utcdt(self):
-
-        dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00Z')
-        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00Z').astimezone(pytz.timezone('UTC')))
-
-        dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00+00:00')
-        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00Z').astimezone(pytz.timezone('UTC')))
-
-        dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00+02:00')
-        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00+02:00').astimezone(pytz.timezone('UTC')))
-
-        dt_utc = psynudge.core.iso2utcdt('2020-01-10T00:00:00-03:00')
-        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00-03:00').astimezone(pytz.timezone('UTC')))
-
-
 class DatabaseTests(unittest.TestCase):
-
-    #db = psynudge.db.build_db(filepath=':memory:', create_db=True) # DB wo participant, just studys and timepoints
-
-    #Participants finishes:
-    #2020-01-19T04:00:00+00:00
-    #2020-01-19T03:00:00+00:00
-    #2020-01-19T02:00:00+00:00
-    #2020-01-19T01:00:00+00:00
-    #2020-01-19T00:00:00+00:00
-    #2020-01-19T00:00:00+00:00
-    #2020-01-18T23:00:00+00:00
-    #2020-01-18T22:00:00+00:00
-    #2020-01-18T21:00:00+00:00
-    #2020-01-18T20:00:00+00:00
 
     @db_session
     def test_updateParticipant_fromFile(self, db=db):
@@ -230,49 +178,7 @@ class DatabaseTests(unittest.TestCase):
         db.rollback()
 
     @db_session
-    @mock.patch('psynudge.src.core.getUtcNow')
-    def test_updateCompletionIsNeeded(self, mock, db=db):
-
-        psynudge.core.updateParticipant(
-            db = db,
-            ps_file_path = os.path.join(test_dir, 'fixtures', 'ps_data.json'),
-            study = db.Study.select(lambda study: study.name=='indep_test').first())
-
-        self.assertEqual(db.Completion.select(lambda c: c.isNeeded is False).count(), 20)
-
-        # Start dt: "2020-01-10T00:00:00Z"
-        mock.return_value = dateutil.parser.parse("2020-01-01T12:12:12Z").astimezone(pytz.timezone('UTC'))
-        psynudge.core.updateCompletionIsNeeded(db=db)
-        self.assertEqual(db.Completion.select(lambda c: c.isNeeded is True).count(), 0)
-
-        mock.return_value = dateutil.parser.parse("2020-01-10T23:59:59Z").astimezone(pytz.timezone('UTC'))
-        psynudge.core.updateCompletionIsNeeded(db=db)
-        self.assertEqual(db.Completion.select(lambda c: c.isNeeded is True).count(), 4)
-
-        mock.return_value = dateutil.parser.parse("2020-01-11T00:00:11Z").astimezone(pytz.timezone('UTC'))
-        psynudge.core.updateCompletionIsNeeded(db=db)
-        self.assertEqual(db.Completion.select(lambda c: c.isNeeded is True).count(), 6)
-
-        mock.return_value = dateutil.parser.parse("2020-01-11T12:12:12Z").astimezone(pytz.timezone('UTC'))
-        psynudge.core.updateCompletionIsNeeded(db=db)
-        self.assertEqual(db.Completion.select(lambda c: c.isNeeded is True).count(), 10)
-
-        mock.return_value = dateutil.parser.parse("2020-01-11T23:59:59Z").astimezone(pytz.timezone('UTC'))
-        psynudge.core.updateCompletionIsNeeded(db=db)
-        self.assertEqual(db.Completion.select(lambda c: c.isNeeded is True).count(), 6)
-
-        mock.return_value = dateutil.parser.parse("2020-01-12T00:00:11Z").astimezone(pytz.timezone('UTC'))
-        psynudge.core.updateCompletionIsNeeded(db=db)
-        self.assertEqual(db.Completion.select(lambda c: c.isNeeded is True).count(), 4)
-
-        mock.return_value = dateutil.parser.parse("2022-01-15T00:00:00Z").astimezone(pytz.timezone('UTC'))
-        psynudge.core.updateCompletionIsNeeded(db=db)
-        self.assertEqual(db.Completion.select(lambda c: c.isNeeded is True).count(), 0)
-
-        db.rollback()
-
-    @db_session
-    def test_updateIndepStudyIsComplete(self, db=db):
+    def test_updateIsCompleteIndep(self, db=db):
 
         """
         https://survey.alchemer.eu/s3/90288073/indep-tp1?sguid=001 # Did not start
@@ -295,7 +201,7 @@ class DatabaseTests(unittest.TestCase):
         # Add completions for tp1
         tp1 = db.Timepoint.select(lambda tp: tp.name=='indep_tp1').first()
         fp = os.path.join(test_dir, 'fixtures', 'indep_tp1.json')
-        psynudge.core.updateIndepStudyIsComplete(db=db, tp=tp1, alchemy_file_path=fp)
+        psynudge.core.updateIsCompleteIndep(db=db, tp=tp1, alchemy_file_path=fp)
 
         self.assertEqual(db.Completion.select().count(), 20)
         self.assertEqual(db.Completion.select(lambda c: c.isComplete is True).count(), 1)
@@ -310,7 +216,7 @@ class DatabaseTests(unittest.TestCase):
         # Add completions for tp2
         tp2 = db.Timepoint.select(lambda tp: tp.name=='indep_tp2').first()
         fp = os.path.join(test_dir, 'fixtures', 'indep_tp2.json')
-        psynudge.core.updateIndepStudyIsComplete(db=db, tp=tp2, alchemy_file_path=fp)
+        psynudge.core.updateIsCompleteIndep(db=db, tp=tp2, alchemy_file_path=fp)
 
         self.assertEqual(db.Completion.select().count(), 20)
         self.assertEqual(db.Completion.select(lambda c: c.isComplete is True).count(), 2)
@@ -325,7 +231,7 @@ class DatabaseTests(unittest.TestCase):
         db.rollback()
 
     @db_session
-    def test_updateStackStudyIsComplete(self, db=db):
+    def test_updateIsCompleteStack(self, db=db):
 
         """
         https://survey.alchemer.eu/s3/90286853/stack?sguid=001                # Did not do
@@ -353,7 +259,7 @@ class DatabaseTests(unittest.TestCase):
         study = db.Study.select(lambda s: s.name=='stack_test').first()
         stack_tp1 = db.Timepoint.select(lambda tp: tp.name=='stack_tp1').first()
         stack_tp2 = db.Timepoint.select(lambda tp: tp.name=='stack_tp2').first()
-        psynudge.core.updateStackStudyIsComplete(db=db, study=study, alchemy_file_path=fp)
+        psynudge.core.updateIsCompleteStack(db=db, study=study, alchemy_file_path=fp)
 
         # Check if completions are correct
         self.assertFalse(
@@ -380,54 +286,115 @@ class DatabaseTests(unittest.TestCase):
 
         db.rollback()
 
+    @db_session
+    @mock.patch.object(psynudge.src.db.Completion, 'isNudgeTimely')
+    @mock.patch.object(psynudge.src.db.Completion, 'isWithinNudgeWindow')
+    def test_IsNudge(self, mockIsNudgeTimely, mockisWithinNudgeWindow):
 
-class MiscsTests(unittest.TestCase):
-    #test_getDataFilePath
-    #test_isNudgeTimely
+        psynudge.core.updateParticipant(
+            db = db,
+            ps_file_path = os.path.join(test_dir, 'fixtures', 'ps_data.json'),
+            study = db.Study.select(lambda study: study.name=='indep_test').first())
+        completion = db.Completion.select().first()
 
-    @mock.patch('psynudge.src.core.getUtcNow')
-    def test_isWithinWindow(self, mock):
+        mockIsNudgeTimely.return_value = False
+        completion.isComplete=False
+        mockisWithinNudgeWindow.return_value = False
+        self.assertFalse(completion.isNudge())
 
-        mock.return_value = dateutil.parser.parse("2020-01-10T00:00:00Z").astimezone(pytz.timezone('UTC'))
-        start = dateutil.parser.parse("2020-01-09T00:00:00Z").astimezone(pytz.timezone('UTC'))
-        end =   dateutil.parser.parse("2020-01-11T00:00:00Z").astimezone(pytz.timezone('UTC'))
-        self.assertTrue(psynudge.core.isWithinWindow(start, end))
+        mockIsNudgeTimely.return_value = False
+        completion.isComplete=True
+        mockisWithinNudgeWindow.return_value = False
+        self.assertFalse(completion.isNudge())
 
-        mock.return_value = dateutil.parser.parse("2020-01-08T00:00:00Z").astimezone(pytz.timezone('UTC'))
-        start = dateutil.parser.parse("2020-01-09T00:00:00Z").astimezone(pytz.timezone('UTC'))
-        end =   dateutil.parser.parse("2020-01-11T00:00:00Z").astimezone(pytz.timezone('UTC'))
-        self.assertFalse(psynudge.core.isWithinWindow(start, end))
+        mockIsNudgeTimely.return_value = False
+        completion.isComplete=False
+        mockisWithinNudgeWindow.return_value = True
+        self.assertFalse(completion.isNudge())
 
-        # Cases when time zone is non UTC
-        mock.return_value = dateutil.parser.parse("2020-01-10T04:00:01Z").astimezone(pytz.timezone('UTC'))
-        start = dateutil.parser.parse("2020-01-10T00:00:00-04:00").astimezone(pytz.timezone('UTC'))
-        end =   dateutil.parser.parse("2020-01-11T00:00:00-04:00").astimezone(pytz.timezone('UTC'))
-        self.assertTrue(psynudge.core.isWithinWindow(start, end))
+        mockIsNudgeTimely.return_value = False
+        completion.isComplete=True
+        mockisWithinNudgeWindow.return_value = True
+        self.assertFalse(completion.isNudge())
 
-        mock.return_value = dateutil.parser.parse("2020-01-10T03:59:59Z").astimezone(pytz.timezone('UTC'))
-        start = dateutil.parser.parse("2020-01-10T00:00:00-04:00").astimezone(pytz.timezone('UTC'))
-        end =   dateutil.parser.parse("2020-01-11T00:00:00-04:00").astimezone(pytz.timezone('UTC'))
-        self.assertFalse(psynudge.core.isWithinWindow(start, end))
+        mockIsNudgeTimely.return_value = True
+        completion.isComplete=False
+        mockisWithinNudgeWindow.return_value = False
+        self.assertFalse(completion.isNudge())
 
-        mock.return_value = dateutil.parser.parse("2020-01-11T03:59:59Z").astimezone(pytz.timezone('UTC'))
-        start = dateutil.parser.parse("2020-01-10T00:00:00-04:00").astimezone(pytz.timezone('UTC'))
-        end =   dateutil.parser.parse("2020-01-11T00:00:00-04:00").astimezone(pytz.timezone('UTC'))
-        self.assertTrue(psynudge.core.isWithinWindow(start, end))
+        mockIsNudgeTimely.return_value = True
+        completion.isComplete=True
+        mockisWithinNudgeWindow.return_value = False
+        self.assertFalse(completion.isNudge())
 
-        mock.return_value = dateutil.parser.parse("2020-01-11T04:00:01Z").astimezone(pytz.timezone('UTC'))
-        start = dateutil.parser.parse("2020-01-10T00:00:00-04:00").astimezone(pytz.timezone('UTC'))
-        end =   dateutil.parser.parse("2020-01-11T00:00:00-04:00").astimezone(pytz.timezone('UTC'))
-        self.assertFalse(psynudge.core.isWithinWindow(start, end))
+        mockIsNudgeTimely.return_value = True
+        completion.isComplete=False
+        mockisWithinNudgeWindow.return_value = True
+        self.assertTrue(completion.isNudge())
 
-        # UTC representation assertion check
-        mock.return_value = dateutil.parser.parse("2020-01-10T00:00:00Z").astimezone(pytz.timezone('UTC'))
-        start = dateutil.parser.parse("2020-01-09T00:00:00Z")
-        end =   dateutil.parser.parse("2020-01-11T00:00:00Z")
-        with self.assertRaises(AssertionError):
-            self.assertTrue(psynudge.core.isWithinWindow(start, end))
+        mockIsNudgeTimely.return_value = True
+        completion.isComplete=True
+        mockisWithinNudgeWindow.return_value = True
+        self.assertFalse(completion.isNudge())
+
+        db.rollback()
 
     @db_session
-    @mock.patch('psynudge.src.core.getUtcNow')
+    @mock.patch('psynudge.src.db.getUtcNow')
+    def test_isPastCompletion(self, mock):
+
+        # Start and finish of each completion
+        #    ('2020-01-10T20:00:00', '2020-01-11T20:00:00')
+        #    ('2020-01-10T21:00:00', '2020-01-11T21:00:00')
+        #    ('2020-01-10T22:00:00', '2020-01-11T22:00:00')
+        #    ('2020-01-10T23:00:00', '2020-01-11T23:00:00')
+        #    ('2020-01-11T00:00:00', '2020-01-12T00:00:00')
+        #    ('2020-01-11T00:00:00', '2020-01-12T00:00:00')
+        #    ('2020-01-11T01:00:00', '2020-01-12T01:00:00')
+        #    ('2020-01-11T02:00:00', '2020-01-12T02:00:00')
+        #    ('2020-01-11T03:00:00', '2020-01-12T03:00:00')
+        #    ('2020-01-11T04:00:00', '2020-01-12T04:00:00')
+
+        #    ('2020-01-15T20:00:00', '2020-01-16T20:00:00')
+        #    ('2020-01-15T21:00:00', '2020-01-16T21:00:00')
+        #    ('2020-01-15T22:00:00', '2020-01-16T22:00:00')
+        #    ('2020-01-15T23:00:00', '2020-01-16T23:00:00')
+        #    ('2020-01-16T00:00:00', '2020-01-17T00:00:00')
+        #    ('2020-01-16T00:00:00', '2020-01-17T00:00:00')
+        #    ('2020-01-16T01:00:00', '2020-01-17T01:00:00')
+        #    ('2020-01-16T02:00:00', '2020-01-17T02:00:00')
+        #    ('2020-01-16T03:00:00', '2020-01-17T03:00:00')
+        #    ('2020-01-16T04:00:00', '2020-01-17T04:00:00')
+
+        psynudge.core.updateParticipant(
+            db = db,
+            ps_file_path = os.path.join(test_dir, 'fixtures', 'ps_data.json'),
+            study = db.Study.select(lambda study: study.name=='indep_test').first())
+
+        self.assertEqual(db.Completion.select().count(), 20)
+
+        mock.return_value = dateutil.parser.parse("2020-01-10T19:59:59Z").astimezone(pytz.timezone('UTC'))
+        self.assertEqual(sum([c.isPastCompletion() for c in db.Completion.select().fetch()]), 0)
+
+        mock.return_value = dateutil.parser.parse("2020-01-11T20:00:01Z").astimezone(pytz.timezone('UTC'))
+        self.assertEqual(sum([c.isPastCompletion() for c in db.Completion.select().fetch()]), 1)
+
+        mock.return_value = dateutil.parser.parse("2020-01-11T23:00:01Z").astimezone(pytz.timezone('UTC'))
+        self.assertEqual(sum([c.isPastCompletion() for c in db.Completion.select().fetch()]), 4)
+
+        mock.return_value = dateutil.parser.parse("2020-01-12T01:00:01Z").astimezone(pytz.timezone('UTC'))
+        self.assertEqual(sum([c.isPastCompletion() for c in db.Completion.select().fetch()]), 7)
+
+        mock.return_value = dateutil.parser.parse("2020-01-17T03:00:01Z").astimezone(pytz.timezone('UTC'))
+        self.assertEqual(sum([c.isPastCompletion() for c in db.Completion.select().fetch()]), 19)
+
+        mock.return_value = dateutil.parser.parse("2020-01-17T05:00:01Z").astimezone(pytz.timezone('UTC'))
+        self.assertEqual(sum([c.isPastCompletion() for c in db.Completion.select().fetch()]), 20)
+
+        db.rollback()
+
+    @db_session
+    @mock.patch('psynudge.src.db.getUtcNow')
     def test_isNudgeTimely(self, mock):
 
         psynudge.core.updateParticipant(
@@ -438,74 +405,103 @@ class MiscsTests(unittest.TestCase):
 
         mock.return_value = dateutil.parser.parse("2020-01-10T12:00:00Z").astimezone(pytz.timezone('UTC'))
         completion.lastNudgeSend = "2020-01-10T00:00:01Z"
-        self.assertFalse(psynudge.core.isNudgeTimely(completion=completion))
+        self.assertFalse(completion.isNudgeTimely())
 
         mock.return_value = dateutil.parser.parse("2020-01-10T23:38:00Z").astimezone(pytz.timezone('UTC'))
         completion.lastNudgeSend = "2020-01-10T00:00:01Z"
-        self.assertFalse(psynudge.core.isNudgeTimely(completion=completion))
+        self.assertFalse(completion.isNudgeTimely())
 
         mock.return_value = dateutil.parser.parse("2020-01-10T23:39:00Z").astimezone(pytz.timezone('UTC'))
         completion.lastNudgeSend = "2020-01-10T00:00:01Z"
-        self.assertTrue(psynudge.core.isNudgeTimely(completion=completion))
+        self.assertTrue(completion.isNudgeTimely())
 
         mock.return_value = dateutil.parser.parse("2020-01-11T03:39:00Z").astimezone(pytz.timezone('UTC'))
         completion.lastNudgeSend = "2020-01-10T00:00:01Z"
-        self.assertTrue(psynudge.core.isNudgeTimely(completion=completion))
+        self.assertTrue(completion.isNudgeTimely())
 
         db.rollback()
 
-    @db_session
-    @mock.patch('psynudge.src.core.isWithinNudgeWindow')
-    @mock.patch('psynudge.src.core.isNudgeTimely')
-    def test_isNudge(self, mockIsNudgeTimely, mockIsWithinNudgeWindow):
 
-        psynudge.core.updateParticipant(
-            db = db,
-            ps_file_path = os.path.join(test_dir, 'fixtures', 'ps_data.json'),
-            study = db.Study.select(lambda study: study.name=='indep_test').first())
-        completion = db.Completion.select().first()
+class DatetimeTests(unittest.TestCase):
+    """ Tests for datetime manipulations """
 
-        mockIsNudgeTimely.return_value = False
-        completion.isComplete=False
-        mockIsWithinNudgeWindow.return_value = False
-        self.assertFalse(psynudge.core.isNudge(db=db, completion=completion))
+    dtStartUTC = dateutil.parser.parse("2020-01-10T00:00:00Z").astimezone(pytz.timezone('UTC'))
 
-        mockIsNudgeTimely.return_value = False
-        completion.isComplete=True
-        mockIsWithinNudgeWindow.return_value = False
-        self.assertFalse(psynudge.core.isNudge(db=db, completion=completion))
+    def test_iso2dt(self):
 
-        mockIsNudgeTimely.return_value = False
-        completion.isComplete=False
-        mockIsWithinNudgeWindow.return_value = True
-        self.assertFalse(psynudge.core.isNudge(db=db, completion=completion))
+        dt_loc = psynudge.dt_funcs.iso2dt('2020-01-10T00:00:00Z')
+        self.assertEqual(dt_loc, dateutil.parser.parse('2020-01-10T00:00:00Z').astimezone(pytz.timezone('UTC')))
 
-        mockIsNudgeTimely.return_value = False
-        completion.isComplete=True
-        mockIsWithinNudgeWindow.return_value = True
-        self.assertFalse(psynudge.core.isNudge(db=db, completion=completion))
+        dt_loc = psynudge.dt_funcs.iso2dt('2020-01-10T00:00:00+00:00')
+        self.assertEqual(dt_loc, dateutil.parser.parse('2020-01-10T00:00:00Z').astimezone(pytz.timezone('UTC')))
 
-        mockIsNudgeTimely.return_value = True
-        completion.isComplete=False
-        mockIsWithinNudgeWindow.return_value = False
-        self.assertFalse(psynudge.core.isNudge(db=db, completion=completion))
+        dt_loc = psynudge.dt_funcs.iso2dt('2020-01-10T00:00:00+02:00')
+        dt_utc = psynudge.dt_funcs.iso2utcdt('2020-01-10T00:00:00+02:00')
+        self.assertEqual(dt_loc.astimezone(pytz.timezone('UTC')), dt_utc)
+        self.assertEqual(dt_loc.astimezone(pytz.timezone('UTC')), dateutil.parser.parse('2020-01-10T00:00:00+02:00').astimezone(pytz.timezone('UTC')))
 
-        mockIsNudgeTimely.return_value = True
-        completion.isComplete=True
-        mockIsWithinNudgeWindow.return_value = False
-        self.assertFalse(psynudge.core.isNudge(db=db, completion=completion))
+        dt_loc = psynudge.dt_funcs.iso2dt('2020-01-10T00:00:00-03:00')
+        dt_utc = psynudge.dt_funcs.iso2utcdt('2020-01-10T00:00:00-03:00')
+        self.assertEqual(dt_loc.astimezone(pytz.timezone('UTC')), dt_utc)
+        self.assertEqual(dt_loc.astimezone(pytz.timezone('UTC')), dateutil.parser.parse('2020-01-10T00:00:00-03:00').astimezone(pytz.timezone('UTC')))
 
-        mockIsNudgeTimely.return_value = True
-        completion.isComplete=False
-        mockIsWithinNudgeWindow.return_value = True
-        self.assertTrue(psynudge.core.isNudge(db=db, completion=completion))
+    def test_iso2utcdt(self):
 
-        mockIsNudgeTimely.return_value = True
-        completion.isComplete=True
-        mockIsWithinNudgeWindow.return_value = True
-        self.assertFalse(psynudge.core.isNudge(db=db, completion=completion))
+        dt_utc = psynudge.dt_funcs.iso2utcdt('2020-01-10T00:00:00Z')
+        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00Z').astimezone(pytz.timezone('UTC')))
 
-        db.rollback()
+        dt_utc = psynudge.dt_funcs.iso2utcdt('2020-01-10T00:00:00+00:00')
+        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00Z').astimezone(pytz.timezone('UTC')))
+
+        dt_utc = psynudge.dt_funcs.iso2utcdt('2020-01-10T00:00:00+02:00')
+        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00+02:00').astimezone(pytz.timezone('UTC')))
+
+        dt_utc = psynudge.dt_funcs.iso2utcdt('2020-01-10T00:00:00-03:00')
+        self.assertEqual(dt_utc, dateutil.parser.parse('2020-01-10T00:00:00-03:00').astimezone(pytz.timezone('UTC')))
+
+    @mock.patch('psynudge.src.dt_funcs.getUtcNow')
+    def test_isWithinTimeWindow(self, mock):
+
+        mock.return_value = dateutil.parser.parse("2020-01-10T00:00:00Z").astimezone(pytz.timezone('UTC'))
+        start = dateutil.parser.parse("2020-01-09T00:00:00Z").astimezone(pytz.timezone('UTC'))
+        end =   dateutil.parser.parse("2020-01-11T00:00:00Z").astimezone(pytz.timezone('UTC'))
+        self.assertTrue(psynudge.dt_funcs.isWithinTimeWindow(start, end))
+
+        mock.return_value = dateutil.parser.parse("2020-01-08T00:00:00Z").astimezone(pytz.timezone('UTC'))
+        start = dateutil.parser.parse("2020-01-09T00:00:00Z").astimezone(pytz.timezone('UTC'))
+        end =   dateutil.parser.parse("2020-01-11T00:00:00Z").astimezone(pytz.timezone('UTC'))
+        self.assertFalse(psynudge.dt_funcs.isWithinTimeWindow(start, end))
+
+        # Cases when time zone is non UTC
+        mock.return_value = dateutil.parser.parse("2020-01-10T04:00:01Z").astimezone(pytz.timezone('UTC'))
+        start = dateutil.parser.parse("2020-01-10T00:00:00-04:00").astimezone(pytz.timezone('UTC'))
+        end =   dateutil.parser.parse("2020-01-11T00:00:00-04:00").astimezone(pytz.timezone('UTC'))
+        self.assertTrue(psynudge.dt_funcs.isWithinTimeWindow(start, end))
+
+        mock.return_value = dateutil.parser.parse("2020-01-10T03:59:59Z").astimezone(pytz.timezone('UTC'))
+        start = dateutil.parser.parse("2020-01-10T00:00:00-04:00").astimezone(pytz.timezone('UTC'))
+        end =   dateutil.parser.parse("2020-01-11T00:00:00-04:00").astimezone(pytz.timezone('UTC'))
+        self.assertFalse(psynudge.dt_funcs.isWithinTimeWindow(start, end))
+
+        mock.return_value = dateutil.parser.parse("2020-01-11T03:59:59Z").astimezone(pytz.timezone('UTC'))
+        start = dateutil.parser.parse("2020-01-10T00:00:00-04:00").astimezone(pytz.timezone('UTC'))
+        end =   dateutil.parser.parse("2020-01-11T00:00:00-04:00").astimezone(pytz.timezone('UTC'))
+        self.assertTrue(psynudge.dt_funcs.isWithinTimeWindow(start, end))
+
+        mock.return_value = dateutil.parser.parse("2020-01-11T04:00:01Z").astimezone(pytz.timezone('UTC'))
+        start = dateutil.parser.parse("2020-01-10T00:00:00-04:00").astimezone(pytz.timezone('UTC'))
+        end =   dateutil.parser.parse("2020-01-11T00:00:00-04:00").astimezone(pytz.timezone('UTC'))
+        self.assertFalse(psynudge.dt_funcs.isWithinTimeWindow(start, end))
+
+        # UTC representation assertion check
+        mock.return_value = dateutil.parser.parse("2020-01-10T00:00:00Z").astimezone(pytz.timezone('UTC'))
+        start = dateutil.parser.parse("2020-01-09T00:00:00Z")
+        end =   dateutil.parser.parse("2020-01-11T00:00:00Z")
+        with self.assertRaises(AssertionError):
+            self.assertTrue(psynudge.dt_funcs.isWithinTimeWindow(start, end))
+
+
+class MiscsTests(unittest.TestCase):
 
     def test_getResponseSguid(self):
 
