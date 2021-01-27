@@ -6,7 +6,7 @@ Define sqlite DB structure which represents teh studies and surveys
 """
 
 from pony.orm import *
-from .dt_funcs import *
+from .mydt import *
 import datetime
 import os
 
@@ -116,10 +116,10 @@ class Completion(db.Entity):
     isComplete = Required(bool, default=False) # is the timepoint completed
     lastNudgeSend = Optional(str, default='2020-01-01T00:00:00+00:00') # in UTC
     #isNudge = Required(bool, default=False)
-    #isPastCompletion = Required(bool, default=False) # should the timpoint be completed already
+    #isAfterCompletion = Required(bool, default=False) # should the timpoint be completed already
     #isNudgeTimely = Required(bool, default=False) # did at least 23h past since last nudge
 
-    def isPastCompletion(self): # Tested
+    def isAfterCompletion(self): # Tested
         """ Returns True if completion is expected, False if before / after time completion window """
 
         now = getUtcNow()
@@ -132,7 +132,7 @@ class Completion(db.Entity):
 
         return False
 
-    def isWithinNudgeWindow(self): #Imp tested
+    def isBeforeNudgeEnd(self): #Imp tested
         """ Checks if now is within nudge time window of user and tp """
 
         tp = self.timepoint
@@ -169,7 +169,7 @@ class Completion(db.Entity):
             return False
 
         # Check if we are within nudge time window
-        if self.isWithinNudgeWindow() is False:
+        if self.isBeforeNudgeEnd() is False:
             return False
 
         # Check if last nudge was sent within 23.5 hours
@@ -181,12 +181,16 @@ class Completion(db.Entity):
 def get_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), create_db=False):
     """ Returns existing sqlite database"""
 
+    #if db.provider is None:
     db.bind(provider='sqlite', filename=filepath, create_db=create_db)
     db.generate_mapping(create_tables=True)
     return db
 
 def build_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), create_db=True):
     """ Deletes old database (if exists) and returns newly built sqlite database"""
+
+    if db.provider is not None:
+        return db
 
     if os.path.isfile(filepath):
         os.remove(filepath)

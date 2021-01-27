@@ -12,7 +12,7 @@ from .tokens import sg_key, sg_secret, ps_key, ps_secret
 from .db import get_db
 from pony.orm import db_session, commit
 import datetime
-from .dt_funcs import *
+from .mydt import *
 import requests
 import logging
 import pytz
