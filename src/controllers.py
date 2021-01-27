@@ -28,51 +28,58 @@ def updatePsData2Db(db, save=True):
 
     deletePastParticipant(db)
 
-def updateSgData2Db(db, save=True, forceNew=False):
+def updateSgData2Db(db, save=True, getAll=False):
     """ Downloads SG data and updates DB """
 
     assert isinstance(save, bool)
-    assert isinstance(forceNew, bool)
+    assert isinstance(getAll, bool)
 
     for study in db.Study.select(lambda s: s.isActive is True).fetch():
 
-        if study.type=='stack':
-            alchemy_data = getSgData(study=study, forceNew=forceNew)
+        if study.type.type=='stack':
+            alchemy_data = getSgData(study=study, getAll=getAll)
             updateIsCompleteStack(db=db, study=study, alchemy_data=alchemy_data)
 
             if save:
-                filepath = getDataFilePath(study=study, source='ps')
+                filepath = getDataFilePath(study=study, source='sg')
                 saveData(ps_data, filepath)
 
-        if study.type=='indep':
+        if study.type.type=='indep':
             for tp in study.timepoints:
-                alchemy_data = getSgData(study=study, tp=tp, forceNew=forceNew)
-                updateIsCompleteIndep(db=db, study=study, timepoint=tp, alchemy_data=alchemy_data)
+                alchemy_data = getSgData(study=study, tp=tp, getAll=getAll)
+                updateIsCompleteIndep(db=db, tp=tp, alchemy_data=alchemy_data)
 
                 if save:
                     filepath = getDataFilePath(study=study, tp=tp, source='sg')
                     saveData(ps_data, filepath)
 
 def sendNudges(db):
-    """ Checks the status of """
+    """ For all tps, collects Completion with .isNudge=True and then calls PS to send reminder email """
 
     for tp in db.Timepoint.select().fetch():
 
         if tp.study.isActive is False:
             continue
 
-        nudge_ids = [nudgeCompletion.participant.psId for nudgeCompletion in db.Completion.select(lambda c: c.timepoint==tp and c.isNudge is True).fetch()]
+        nudge_comps = db.Completion.select(lambda c:
+            c.isNudge is True and
+            c.timepoint==tp).fetch()
 
-        #/v2/studies/**study_id**/timepoints/**timepoint_id**/send
-        response = requests.post('https://dashboard-api.psychedelicsurvey.com/v2/studies/{}/timepoints/{}/send'.format(
-            tp.study.id,
-            tp.psId),
-        headers={
-            'ClientSecret': ps_secret,
-            'ClientID': ps_key,},)
+        nudge_ids = [nudge_comp.participant.psId for nudge_comp in nudge_comps]
 
-        #{
-        #    "subject":"test",
-        #    "participants": [
-        #        "8nOqZpfooGbbhxqJ"
-        #    ],
+        ps_call = requests.post(
+            'https://dashboard-api.psychedelicsurvey.com/v2/studies/{}/timepoints/{}/send'.format(
+                tp.study.psId,
+                tp.psId,
+                ),
+            json={
+                "subject" : "Reminder to complete missed survey",
+                "participants" : nudge_ids,
+                },
+            headers={
+                'ClientSecret' : ps_secret,
+                'ClientID' : ps_key,
+                },
+            )
+
+        assert ps_call.response_code==200

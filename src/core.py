@@ -20,6 +20,11 @@ import json
 import os
 
 #TODO: what happens when user changes start date
+#TODO: db integrty: check that all TPs have the same lastSGCheck for stack studies
+#TODO: db integrty: check that all TPs have the same surveyId for stack studies
+#TODO: lastPsCheck update in controller
+#
+
 
 
 src_folder = os.path.dirname(os.path.abspath(__file__))
@@ -76,6 +81,8 @@ def updateParticipant(db, study, ps_file_path=None, ps_data=None): #Tested
         # Create completion entries for participant
         createCompletion(participant=participant, db=db)
 
+# completion.isCompleted is updated by updateIsCompleteZZZ
+# rest is calculated as instance functions
 @db_session
 def updateIsCompleteIndep(db, tp, alchemy_file_path=None, alchemy_data=None): #Tested
     """ Updates the database with the new completions from Alchemer JSON for independent studies """
@@ -181,9 +188,6 @@ def deletePastParticipant(db): #Tested
 
     commit()
 
-# completion.isCompleted is updated by updateIsCompleteZZZ
-# rest is calculated as instance functions
-
 
 """ Data acess and archieve """
 def getPsData(study, base_dir=base_dir): #Imp tested
@@ -200,17 +204,18 @@ def getPsData(study, base_dir=base_dir): #Imp tested
     study.lastPsCheck = getUtcNow().isoformat()
     return response.json()
 
-def getSgData(study, tp=None, forceNew=False): #Imp tested
+def getSgData(study, tp=None, getAll=False): #Imp tested
     """ Download SG data save """
 
     if tp is None:
-        assert study.type=='stack'
-        lastSgCheck = study.timepoints.select().first().lastSgCheck
-    else:
-        assert study.type=='indep'
-        lastSgCheck = tp.lastSgCheck
+        assert study.type.type=='stack'
+        tp = study.timepoints.select().first() # for stack stuides all tps have same Id
 
-    assert isinstance(forceNew, bool)
+    if study.type.type=='indep':
+        assert tp is not None
+
+    lastSgCheck = tp.lastSgCheck
+    assert isinstance(getAll, bool)
     assert isinstance(lastSgCheck, str)
 
     client = SurveyGizmo(api_version='v5',
@@ -219,22 +224,23 @@ def getSgData(study, tp=None, forceNew=False): #Imp tested
                          api_token_secret = sg_secret)
 
     client.config.base_url = 'https://restapi.surveygizmo.eu/'
-    tps = list(set(study.tps))
 
-    if (forceNew is True):
+    # Download data
+    if getAll is True:
         temp = client.api.surveyresponse.resultsperpage(value=100000).list(tp.surveyId)
-    else:
+
+    if getAll is False:
         temp = client.api.surveyresponse.filter(
             field    = 'date_submitted',
-            operator = '<',
+            operator = '>',
             value    = lastSgCheck).resultsperpage(value=100000).list(tp.surveyId)
 
     sg_data = json.loads(temp)
-    assert sg_data['total_pages']==1
+    assert sg_data['total_pages'] in [0,1]
     assert sg_data['result_ok'] is True
 
+    # update lastSgCheck
     utcNowStr=getUtcNow().isoformat()
-
     if study.type.type=='stack':
         for tp in study.timepoints:
             tp.lastSgCheck = utcNowStr
@@ -242,7 +248,7 @@ def getSgData(study, tp=None, forceNew=False): #Imp tested
     if study.type.type=='indep':
         tp.lastSgCheck = utcNowStr
 
-    nudgelog.info('SG data downloaded, study:{}, tp{}:.'.format(study.name, tp.name))
+    #nudgelog.info('SG data downloaded, study:{}, tp{}:.'.format(study.name, tp.name))
     return sg_data
 
 def getDataFilePath(study, tp=None, source=None, base_dir=base_dir): #Tested

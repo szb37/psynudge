@@ -25,7 +25,6 @@ class Study(db.Entity):
     timepoints = Set('Timepoint')
     lastPsCheck = Required(str, default='2020-01-01T00:00:00+00:00') # in UTC
     isActive    = Required(bool, default=True)
-    isMock      = Required(bool, default=False)
 
     def areTpsConsistent(self):
 
@@ -178,6 +177,7 @@ class Completion(db.Entity):
 
         return True
 
+
 def get_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), create_db=False):
     """ Returns existing sqlite database"""
 
@@ -186,7 +186,7 @@ def get_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), create_
     db.generate_mapping(create_tables=True)
     return db
 
-def build_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), create_db=True):
+def build_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), create_db=True, mock_db=False):
     """ Deletes old database (if exists) and returns newly built sqlite database"""
 
     if db.provider is not None:
@@ -197,6 +197,7 @@ def build_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), creat
 
     db = get_db(filepath=filepath, create_db=create_db)
 
+    """ Define database entries for mock studies """
     with db_session:
 
         """ define study types """
@@ -206,9 +207,8 @@ def build_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), creat
         """ indep_mock_study """
         indep_mock_study = Study(
             psId='38130fdb-5c9e-11eb-ac63-0a280c4496dd',
-            name='indep_test',
+            name='indep_study',
             type=indep_type,
-            isMock=True,
         )
         indep_tp1 = Timepoint(
             study = indep_mock_study,
@@ -237,9 +237,8 @@ def build_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), creat
         """ stack_mock_study """
         stack_mock_study = Study(
             psId='38130fdb-5c9e-11eb-ac63-0a280c4496dd',
-            name='stack_test',
+            name='stack_study',
             type='stack',
-            isMock=True,
         )
         stack_tp1 = Timepoint(
             study = stack_mock_study,
@@ -266,5 +265,12 @@ def build_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), creat
             td2nudge = datetime.timedelta(days=2)
         )
         stack_mock_study.timepoints = [stack_tp1, stack_tp2]
+
+    if mock_db is True:
+        return db
+
+    """ Define database entries for active studies """
+    with db_session:
+        pass
 
     return db

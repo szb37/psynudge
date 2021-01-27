@@ -11,8 +11,8 @@ from .db import Study, StudyType, Timepoint
 
 
 """ Define mock studies """
-indep_test_study = Study(
-    name='indep_test',
+indep_study_study = Study(
+    name='indep_study',
     type='indep',
     tps = [
         Timepoint(name='tp1', surveyId='90288073', td2start=td(days=1), td2end=td(days=1), td2nudge=td(days=1), firstQID=2, lastQID=18),
@@ -20,8 +20,8 @@ indep_test_study = Study(
     ]
 )
 
-stack_test_study = Study(
-    name='stack_test',
+stack_study_study = Study(
+    name='stack_study',
     type='stack',
     tps = [
         Timepoint(name='tp1', surveyId='90286853', td2start=td(days=1), td2end=td(days=1), td2nudge=td(days=1), firstQID=2, lastQID=18, startPageId=1),

@@ -6,7 +6,6 @@
 python -m pytest psynudge/tests/
 """
 
-from pony.orm import db_session
 from unittest import mock
 import dateutil.parser
 import datetime
@@ -14,10 +13,6 @@ import psynudge
 import unittest
 import pytz
 import json
-import os
-
-#test_dir = os.path.dirname(os.path.abspath(__file__))
-#db = psynudge.db.build_db(filepath=':memory:', create_db=True) # DB wo participant, just studys and timepoints
 
 
 class DatetimeTests(unittest.TestCase):

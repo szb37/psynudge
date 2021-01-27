@@ -19,10 +19,30 @@ import psynudge
 db = psynudge.db.build_db()
 psynudge.controllers.updatePsData2Db(db=db)
 
-
 https://survey.alchemer.eu/s3/90288073/indep-tp1
 https://survey.alchemer.eu/s3/90289410/indep-tp2
 https://survey.alchemer.eu/s3/90286853/stacked
+
+#Read in JSON
+import dateutil.parser
+import json
+
+file_path='/media/sf_vm_share/psynudge/tests/fixtures/indep_tp2.json'
+with open(file_path, 'r') as f:
+    data = json.loads(f.read())
+
+for entry in data['data']:
+    print(
+        dateutil.parser.parse(entry['date_submitted']).isoformat()
+    )
+
+#2020-11-06T10:58:09+00:00
+#2020-11-06T11:02:18+00:00
+#2020-11-06T11:04:22+00:00
+#2020-11-06T11:05:14+00:00
+
+
+
 
 
 

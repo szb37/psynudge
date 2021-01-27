@@ -9,14 +9,13 @@ python -m pytest psynudge/tests/
 from pony.orm import db_session
 from unittest import mock
 import dateutil.parser
-import datetime
 import psynudge
 import unittest
 import pytz
 import json
 import os
 
-db = psynudge.db.build_db(filepath=':memory:', create_db=True) # DB wo participant, just studys and timepoints
+db = psynudge.db.build_db(filepath=':memory:', create_db=True, mock_db=True) # DB wo participant, just studys and timepoints
 
 
 class CoreTests(unittest.TestCase):
@@ -116,17 +115,17 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(
             psynudge.core.getDataFilePath(study=indep_study, tp=indep_tp1, source='sg'),
-            os.path.join(data_dir, 'indep_test_sg_indep_tp1_from(2020-02-02T00:00:00)_to(2021-04-04T00:00:00).json')
+            os.path.join(data_dir, 'indep_study_sg_indep_tp1_from(2020-02-02T00:00:00)_to(2021-04-04T00:00:00).json')
         )
 
         self.assertEqual(
             psynudge.core.getDataFilePath(study=indep_study, tp=indep_tp2, source='sg'),
-            os.path.join(data_dir, 'indep_test_sg_indep_tp2_from(2020-03-03T00:00:00)_to(2021-04-04T00:00:00).json')
+            os.path.join(data_dir, 'indep_study_sg_indep_tp2_from(2020-03-03T00:00:00)_to(2021-04-04T00:00:00).json')
         )
 
         self.assertEqual(
             psynudge.core.getDataFilePath(study=indep_study, source='ps'),
-            os.path.join(data_dir, 'indep_test_ps_to(2021-04-04T00:00:00).json')
+            os.path.join(data_dir, 'indep_study_ps_to(2021-04-04T00:00:00).json')
         )
 
         stack_tp1.lastSgCheck = '2020-02-22T00:00:00+00:00'
@@ -134,7 +133,51 @@ class CoreTests(unittest.TestCase):
 
         self.assertEqual(
             psynudge.core.getDataFilePath(study=stack_study, source='sg'),
-            os.path.join(data_dir, 'stack_test_sg_stack_from(2020-02-22T00:00:00)_to(2021-04-04T00:00:00).json')
+            os.path.join(data_dir, 'stack_study_sg_stack_from(2020-02-22T00:00:00)_to(2021-04-04T00:00:00).json')
         )
 
         db.rollback()
+
+    @db_session
+    def test_getSgData(self):
+        # The 4 responses for stack mock survey were submitted at:
+        # 2020-11-06T10:58:09+00:00
+        # 2020-11-06T11:02:18+00:00
+        # 2020-11-06T11:04:22+00:00
+        # 2020-11-06T11:05:14+00:00
+
+        stack_study = db.Study.select(lambda s: s.name=='stack_study').first()
+
+        for tp in stack_study.timepoints: # No new submissions
+            tp.lastSgCheck = '2020-11-11T11:11:11+00:00'
+        sg_json = psynudge.core.getSgData(study=stack_study)
+        self.assertEqual(sg_json['total_count'], 0)
+
+        for tp in stack_study.timepoints: # One new submissions
+            tp.lastSgCheck = '2020-11-06T11:04:44+00:00'
+        sg_json = psynudge.core.getSgData(study=stack_study)
+        self.assertEqual(sg_json['total_count'], 1)
+
+        for tp in stack_study.timepoints: # One new submissions
+            tp.lastSgCheck = '2020-11-06T10:58:08+00:00'
+        sg_json = psynudge.core.getSgData(study=stack_study)
+        self.assertEqual(sg_json['total_count'], 4)
+
+        # The 2 responses for indep mock survey were submitted at:
+        # 2020-11-06T11:13:49+00:00
+        # 2020-11-06T11:14:01+00:00
+
+        indep_study = db.Study.select(lambda s: s.name=='indep_study').first()
+        tp = db.Timepoint.select(lambda tp: tp.name=='indep_tp2').first()
+
+        tp.lastSgCheck = '2020-11-06T11:13:40+00:00'
+        sg_json = psynudge.core.getSgData(study=indep_study, tp=tp)
+        self.assertEqual(sg_json['total_count'], 2)
+
+        tp.lastSgCheck = '2020-11-06T11:13:50+00:00'
+        sg_json = psynudge.core.getSgData(study=indep_study, tp=tp)
+        self.assertEqual(sg_json['total_count'], 1)
+
+        tp.lastSgCheck = '2020-11-06T11:16:40+00:00'
+        sg_json = psynudge.core.getSgData(study=indep_study, tp=tp)
+        self.assertEqual(sg_json['total_count'], 0)

@@ -9,7 +9,6 @@ python -m pytest psynudge/tests/
 from pony.orm import db_session
 from unittest import mock
 import dateutil.parser
-import datetime
 import psynudge
 import unittest
 import pytz
@@ -17,7 +16,7 @@ import json
 import os
 
 test_dir = os.path.dirname(os.path.abspath(__file__))
-db = psynudge.db.build_db(filepath=':memory:', create_db=True) # DB wo participant, just studys and timepoints
+db = psynudge.db.build_db(filepath=':memory:', create_db=True, mock_db=True) # DB wo participant, just studys and timepoints
 
 
 class DatabaseTests(unittest.TestCase):
@@ -28,7 +27,7 @@ class DatabaseTests(unittest.TestCase):
         psynudge.core.updateParticipant(
             db = db,
             ps_file_path = os.path.join(test_dir, 'fixtures', 'ps_data.json'),
-            study = db.Study.select(lambda study: study.name=='indep_test').first())
+            study = db.Study.select(lambda study: study.name=='indep_study').first())
 
         self.assertEqual(db.Participant.select().count(), 10)
         self.assertEqual(db.Participant.select().count()*2, db.Completion.select().count())
@@ -82,7 +81,7 @@ class DatabaseTests(unittest.TestCase):
         psynudge.core.updateParticipant(
             db = db,
             ps_data = mock_ps,
-            study = db.Study.select(lambda study: study.name=='indep_test').first())
+            study = db.Study.select(lambda study: study.name=='indep_study').first())
 
         self.assertEqual(db.Participant.select().count(), 10)
         self.assertEqual(db.Participant.select().count()*2, db.Completion.select().count())
@@ -122,7 +121,7 @@ class DatabaseTests(unittest.TestCase):
         psynudge.core.updateParticipant(
             db = db,
             ps_data = mock_ps2,
-            study = db.Study.select(lambda study: study.name=='indep_test').first())
+            study = db.Study.select(lambda study: study.name=='indep_study').first())
 
         self.assertEqual(db.Participant.select().count(), 11)
         self.assertEqual(db.Participant.select().count()*2, db.Completion.select().count())
@@ -152,7 +151,7 @@ class DatabaseTests(unittest.TestCase):
         psynudge.core.updateParticipant(
             db = db,
             ps_file_path = os.path.join(test_dir, 'fixtures', 'ps_data.json'),
-            study = db.Study.select(lambda study: study.name=='indep_test').first())
+            study = db.Study.select(lambda study: study.name=='indep_study').first())
 
         self.assertEqual(db.Participant.select().count(), 10)
         self.assertEqual(db.Completion.select().count(), db.Participant.select().count()*2)
@@ -193,7 +192,7 @@ class DatabaseTests(unittest.TestCase):
         psynudge.core.updateParticipant(
             db = db,
             ps_file_path = os.path.join(test_dir, 'fixtures', 'ps_data.json'),
-            study = db.Study.select(lambda study: study.name=='indep_test').first())
+            study = db.Study.select(lambda study: study.name=='indep_study').first())
 
         self.assertEqual(db.Completion.select().count(), 20)
         self.assertEqual(db.Completion.select(lambda c: c.isComplete is True).count(), 0)
@@ -249,14 +248,14 @@ class DatabaseTests(unittest.TestCase):
         psynudge.core.updateParticipant(
             db = db,
             ps_file_path = os.path.join(test_dir, 'fixtures', 'ps_data.json'),
-            study = db.Study.select(lambda study: study.name=='stack_test').first())
+            study = db.Study.select(lambda study: study.name=='stack_study').first())
 
         self.assertEqual(db.Completion.select().count(), 20)
         self.assertEqual(db.Completion.select(lambda c: c.isComplete is True).count(), 0)
 
         # Add completions from stacked study JSON
         fp = os.path.join(test_dir, 'fixtures', 'stack.json')
-        study = db.Study.select(lambda s: s.name=='stack_test').first()
+        study = db.Study.select(lambda s: s.name=='stack_study').first()
         stack_tp1 = db.Timepoint.select(lambda tp: tp.name=='stack_tp1').first()
         stack_tp2 = db.Timepoint.select(lambda tp: tp.name=='stack_tp2').first()
         psynudge.core.updateIsCompleteStack(db=db, study=study, alchemy_file_path=fp)
@@ -294,7 +293,7 @@ class DatabaseTests(unittest.TestCase):
         psynudge.core.updateParticipant(
             db = db,
             ps_file_path = os.path.join(test_dir, 'fixtures', 'ps_data.json'),
-            study = db.Study.select(lambda study: study.name=='indep_test').first())
+            study = db.Study.select(lambda study: study.name=='indep_study').first())
         completion = db.Completion.select().first()
 
         mockisNudgeTimely.return_value = False
@@ -369,7 +368,7 @@ class DatabaseTests(unittest.TestCase):
         psynudge.core.updateParticipant(
             db = db,
             ps_file_path = os.path.join(test_dir, 'fixtures', 'ps_data.json'),
-            study = db.Study.select(lambda study: study.name=='indep_test').first())
+            study = db.Study.select(lambda study: study.name=='indep_study').first())
 
         self.assertEqual(db.Completion.select().count(), 20)
 
@@ -400,7 +399,7 @@ class DatabaseTests(unittest.TestCase):
         psynudge.core.updateParticipant(
             db = db,
             ps_file_path = os.path.join(test_dir, 'fixtures', 'ps_data.json'),
-            study = db.Study.select(lambda study: study.name=='indep_test').first())
+            study = db.Study.select(lambda study: study.name=='indep_study').first())
         completion = db.Completion.select().first()
 
         mock.return_value = dateutil.parser.parse("2020-01-10T12:00:00Z").astimezone(pytz.timezone('UTC'))
