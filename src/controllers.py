@@ -5,12 +5,25 @@
 """
 
 from .tokens import ps_key, ps_secret
-from .db import get_db, build_db
+from .db import build_empty_db, get_db
 from .core import *
+from .mydt import getUtcNow
 import requests
+import os
+
+src_folder = os.path.dirname(os.path.abspath(__file__))
+base_dir   = os.path.abspath(os.path.join(src_folder, os.pardir))
 
 
-def updatePsData2Db(db, save=True):
+def build_db(filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), delete_past=False):
+
+    db = build_empty_db(filepath=filepath, create_db=True, mock_db=False)
+    updatePsData2Db(db, save=False, delete_past=delete_past)
+    updateSgData2Db(db, save=False, getAll=True)
+    return db
+
+@db_session
+def updatePsData2Db(db, save=True, delete_past=True):
     """ Downloads PS data and updates DB """
 
     assert isinstance(save, bool)
@@ -19,15 +32,17 @@ def updatePsData2Db(db, save=True):
 
         ps_data = getPsData(study)
         updateParticipant(db=db, study=study, ps_data=ps_data)
+
         if save:
             filepath = getDataFilePath(study, source='ps', base_dir=base_dir)
             saveData(ps_data, filepath)
 
-        #with db_session:
-        #    study.lastPsCheck=getUtcNow().isoformat()
+        study.lastPsCheck=getUtcNow().isoformat()
 
-    deletePastParticipant(db)
+        if delete_past is True:
+            deletePastParticipant(db)
 
+@db_session
 def updateSgData2Db(db, save=True, getAll=False):
     """ Downloads SG data and updates DB """
 
@@ -53,6 +68,7 @@ def updateSgData2Db(db, save=True, getAll=False):
                     filepath = getDataFilePath(study=study, tp=tp, source='sg')
                     saveData(ps_data, filepath)
 
+@db_session
 def sendNudges(db):
     """ For all tps, collects Completion with .isNudge=True and then calls PS to send reminder email """
 

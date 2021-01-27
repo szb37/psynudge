@@ -23,8 +23,6 @@ import os
 #TODO: db integrty: check that all TPs have the same lastSGCheck for stack studies
 #TODO: db integrty: check that all TPs have the same surveyId for stack studies
 #TODO: lastPsCheck update in controller
-#
-
 
 
 src_folder = os.path.dirname(os.path.abspath(__file__))
@@ -81,8 +79,6 @@ def updateParticipant(db, study, ps_file_path=None, ps_data=None): #Tested
         # Create completion entries for participant
         createCompletion(participant=participant, db=db)
 
-# completion.isCompleted is updated by updateIsCompleteZZZ
-# rest is calculated as instance functions
 @db_session
 def updateIsCompleteIndep(db, tp, alchemy_file_path=None, alchemy_data=None): #Tested
     """ Updates the database with the new completions from Alchemer JSON for independent studies """
@@ -96,7 +92,7 @@ def updateIsCompleteIndep(db, tp, alchemy_file_path=None, alchemy_data=None): #T
             alchemy_data = json.loads(j.read())
 
     if alchemy_file_path is None:
-        assert isinstance(alchemy_data, list)
+        assert isinstance(alchemy_data, dict)
 
     for response in alchemy_data['data']:
 
@@ -128,7 +124,7 @@ def updateIsCompleteStack(db, study, alchemy_file_path=None, alchemy_data=None):
             alchemy_data = json.loads(j.read())
 
     if alchemy_file_path is None:
-        assert isinstance(alchemy_data, list)
+        assert isinstance(alchemy_data, dict)
 
     # Update data file
     for response in alchemy_data['data']:

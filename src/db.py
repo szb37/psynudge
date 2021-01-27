@@ -181,12 +181,11 @@ class Completion(db.Entity):
 def get_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), create_db=False):
     """ Returns existing sqlite database"""
 
-    #if db.provider is None:
     db.bind(provider='sqlite', filename=filepath, create_db=create_db)
     db.generate_mapping(create_tables=True)
     return db
 
-def build_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), create_db=True, mock_db=False):
+def build_empty_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), create_db=True, mock_db=False):
     """ Deletes old database (if exists) and returns newly built sqlite database"""
 
     if db.provider is not None:
@@ -236,7 +235,7 @@ def build_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), creat
 
         """ stack_mock_study """
         stack_mock_study = Study(
-            psId='38130fdb-5c9e-11eb-ac63-0a280c4496dd',
+            psId='3f4241b2-5cbb-11eb-ac63-0a280c4496dd',
             name='stack_study',
             type='stack',
         )

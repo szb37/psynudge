@@ -16,7 +16,7 @@
 
 """
 import psynudge
-db = psynudge.db.build_db()
+db = psynudge.db.build_empty_db()
 psynudge.controllers.updatePsData2Db(db=db)
 
 https://survey.alchemer.eu/s3/90288073/indep-tp1
@@ -27,7 +27,7 @@ https://survey.alchemer.eu/s3/90286853/stacked
 import dateutil.parser
 import json
 
-file_path='/media/sf_vm_share/psynudge/tests/fixtures/indep_tp2.json'
+file_path='/media/sf_vm_share/psynudge/tests/fixtures/indep_tp1.json'
 with open(file_path, 'r') as f:
     data = json.loads(f.read())
 
@@ -35,6 +35,14 @@ for entry in data['data']:
     print(
         dateutil.parser.parse(entry['date_submitted']).isoformat()
     )
+
+import psynudge
+db = psynudge.controllers.build_db(filepath=':memory:')
+
+db.Study.select(lambda s: s.name=='indep_study').first().participants.select().count()
+
+
+psynudge.core.getPsData(study=db.Study.select(lambda s: s.name=='indep_study').first())
 
 #2020-11-06T10:58:09+00:00
 #2020-11-06T11:02:18+00:00

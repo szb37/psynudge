@@ -16,7 +16,7 @@ import json
 import os
 
 test_dir = os.path.dirname(os.path.abspath(__file__))
-db = psynudge.db.build_db(filepath=':memory:', create_db=True, mock_db=True) # DB wo participant, just studys and timepoints
+db = psynudge.db.build_empty_db(filepath=':memory:', create_db=True, mock_db=True) # DB wo participant, just studys and timepoints
 
 
 class DatabaseTests(unittest.TestCase):
@@ -181,12 +181,12 @@ class DatabaseTests(unittest.TestCase):
 
         """
         https://survey.alchemer.eu/s3/90288073/indep-tp1?sguid=001 # Did not start
-        https://survey.alchemer.eu/s3/90288073/indep-tp1?sguid=002 # Done - started, not finished
-        https://survey.alchemer.eu/s3/90288073/indep-tp1?sguid=003 # Done - finished
+        https://survey.alchemer.eu/s3/90288073/indep-tp1?sguid=002 # started, not finished
+        https://survey.alchemer.eu/s3/90288073/indep-tp1?sguid=003 # finished
 
         https://survey.alchemer.eu/s3/90289410/indep-tp2-copy?sguid=001 # Did not start
-        https://survey.alchemer.eu/s3/90289410/indep-tp2-copy?sguid=002 # Done - started, not finished
-        https://survey.alchemer.eu/s3/90289410/indep-tp2-copy?sguid=003 # Done, finished
+        https://survey.alchemer.eu/s3/90289410/indep-tp2-copy?sguid=002 # started, not finished
+        https://survey.alchemer.eu/s3/90289410/indep-tp2-copy?sguid=003 # finished
         """
 
         psynudge.core.updateParticipant(
@@ -234,14 +234,14 @@ class DatabaseTests(unittest.TestCase):
 
         """
         https://survey.alchemer.eu/s3/90286853/stack?sguid=001                # Did not do
-        https://survey.alchemer.eu/s3/90286853/stack?sguid=002                # Done - started, not finished
-        https://survey.alchemer.eu/s3/90286853/stack?sguid=002&__sgtarget=5   # Done - started, not finished
-        https://survey.alchemer.eu/s3/90286853/stack?sguid=003                # Done - finished both
-        https://survey.alchemer.eu/s3/90286853/stack?sguid=003&__sgtarget=5   # Done - finished both
-        https://survey.alchemer.eu/s3/90286853/stack?sguid=004                # Done - started TP1, finished TP2
-        https://survey.alchemer.eu/s3/90286853/stack?sguid=004&__sgtarget=5   # Done - started TP1, finished TP2
-        https://survey.alchemer.eu/s3/90286853/stack?sguid=005                # Done - finished TP1, started TP2
-        https://survey.alchemer.eu/s3/90286853/stack?sguid=005&__sgtarget=5   # Done - finished TP1, started TP2
+        https://survey.alchemer.eu/s3/90286853/stack?sguid=002                # started, but did not finish eith TPs
+        https://survey.alchemer.eu/s3/90286853/stack?sguid=002&__sgtarget=5   # started, but did not finish eith TPs
+        https://survey.alchemer.eu/s3/90286853/stack?sguid=003                # finished both TPs
+        https://survey.alchemer.eu/s3/90286853/stack?sguid=003&__sgtarget=5   # finished both TPs
+        https://survey.alchemer.eu/s3/90286853/stack?sguid=004                # started TP1 (didnt finish), finished TP2
+        https://survey.alchemer.eu/s3/90286853/stack?sguid=004&__sgtarget=5   # started TP1 (didnt finish), finished TP2
+        https://survey.alchemer.eu/s3/90286853/stack?sguid=005                # finished TP1, started TP2 (didnt finish)
+        https://survey.alchemer.eu/s3/90286853/stack?sguid=005&__sgtarget=5   # finished TP1, started TP2 (didnt finish)
         """
 
         # Update DB with test participants and sanity checks
