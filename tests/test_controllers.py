@@ -26,8 +26,8 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(db.Study.select(lambda s: s.name=='stack_study').first().participants.select().count(), 3)
         self.assertEqual(db.Participant.select().count(), 5)
         self.assertEqual(db.Completion.select().count(), 10)
-        self.assertEqual(db.Participant.select(lambda p: p.psId=='004').first().whenStart, '2021-01-24T23:00:00+00:00')
-        self.assertEqual(db.Participant.select(lambda p: p.psId=='004').first().whenFinish, '2021-02-02T23:00:00+00:00')
+        self.assertEqual(db.Participant.select(lambda p: p.id=='004').first().whenStart, '2021-01-24T23:00:00+00:00')
+        self.assertEqual(db.Participant.select(lambda p: p.id=='004').first().whenFinish, '2021-02-02T23:00:00+00:00')
         self.assertFalse(db.Study.select(lambda s: s.name=='indep_study').first().lastPsCheck == '2020-01-01T00:00:00+00:00')
         self.assertFalse(db.Study.select(lambda s: s.name=='stack_study').first().lastPsCheck == '2020-01-01T00:00:00+00:00')
 

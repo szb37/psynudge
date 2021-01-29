@@ -17,8 +17,7 @@ db = Database()
 
 
 class Study(db.Entity):
-    id = PrimaryKey(int, auto=True)
-    psId = Optional(str)
+    id = PrimaryKey(str)
     name = Optional(str)
     participants = Set('Participant')
     type = Required('StudyType')
@@ -85,7 +84,7 @@ class StudyType(db.Entity):
 
 class Timepoint(db.Entity):
     id = PrimaryKey(int, auto=True)
-    psId = Optional(int)
+    psId = Required(int) # tp id on Psy Survey, same as offset, which may not be unique across studies
     name = Optional(str)
     study = Required(Study)
     completions = Set('Completion')
@@ -100,8 +99,7 @@ class Timepoint(db.Entity):
 
 
 class Participant(db.Entity):
-    id = PrimaryKey(int, auto=True)
-    psId = Required(str)
+    id = PrimaryKey(str)
     study = Required(Study)
     completions = Set('Completion')
     whenStart = Optional(str) # in UTC
@@ -211,13 +209,13 @@ def build_empty_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'),
 
         """ indep_mock_study """
         indep_mock_study = Study(
-            psId='38130fdb-5c9e-11eb-ac63-0a280c4496dd',
+            id='38130fdb-5c9e-11eb-ac63-0a280c4496dd',
             name='indep_study',
             type=indep_type,
         )
         indep_tp1 = Timepoint(
-            study = indep_mock_study,
             psId=1,
+            study = indep_mock_study,
             name = 'indep_tp1',
             surveyId = 90288073,
             firstQID = 2,
@@ -227,8 +225,8 @@ def build_empty_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'),
             td2nudge = datetime.timedelta(days=1)
         )
         indep_tp2 = Timepoint(
-            study = indep_mock_study,
             psId=6,
+            study = indep_mock_study,
             name = 'indep_tp2',
             surveyId = 90289410,
             firstQID = 7,
@@ -241,7 +239,7 @@ def build_empty_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'),
 
         """ stack_mock_study """
         stack_mock_study = Study(
-            psId='3f4241b2-5cbb-11eb-ac63-0a280c4496dd',
+            id='3f4241b2-5cbb-11eb-ac63-0a280c4496dd',
             name='stack_study',
             type='stack',
         )

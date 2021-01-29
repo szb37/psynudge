@@ -55,7 +55,7 @@ def updateParticipant(db, study, ps_file_path=None, ps_data=None): #Tested
     for entry in ps_data:
 
         # Check if participant exists
-        id_match_ps = db.Participant.select(lambda part: part.psId==entry['id']).fetch()
+        id_match_ps = db.Participant.select(lambda p: p.id==entry['id']).fetch()
         assert len(id_match_ps) in [0,1]
 
         # Get trial start date
@@ -78,7 +78,7 @@ def updateParticipant(db, study, ps_file_path=None, ps_data=None): #Tested
         maxTd = study.getFurthestTd()
 
         participant = db.Participant(
-            psId = entry['id'],
+            id = entry['id'],
             study = study,
             whenStart  = start_utc.isoformat(),
             whenFinish = (start_utc + maxTd).isoformat(),)
@@ -103,14 +103,14 @@ def updateIsCompleteIndep(db, tp, alchemy_file_path=None, alchemy_data=None): #T
 
     for response in alchemy_data['data']:
 
-        psId = getResponseSguid(response)
-        if psId is None:
+        id = getResponseSguid(response)
+        if id is None:
             continue
 
         isComplete = assessIsComplete(response=response, tp=tp)
 
         completion = db.Completion.select(lambda c:
-            c.participant.psId==psId and
+            c.participant.id==id and
             c.timepoint==tp).fetch()
 
         if len(completion)!=1: # TODO: why not assert?!?!?!?!
@@ -136,8 +136,8 @@ def updateIsCompleteStack(db, study, alchemy_file_path=None, alchemy_data=None):
     # Update data file
     for response in alchemy_data['data']:
 
-        psId = getResponseSguid(response)
-        if psId is None:
+        id = getResponseSguid(response)
+        if id is None:
             continue
 
         for tp in study.timepoints:
@@ -145,7 +145,7 @@ def updateIsCompleteStack(db, study, alchemy_file_path=None, alchemy_data=None):
             isComplete = assessIsComplete(response=response, tp=tp)
 
             completion = db.Completion.select(lambda c:
-                c.participant.psId==psId and
+                c.participant.id==id and
                 c.timepoint==tp).fetch()
 
             if len(completion)!=1:
@@ -196,7 +196,7 @@ def deletePastParticipant(db): #Tested
 def getPsData(study, base_dir=base_dir): #Imp tested
     """ Updates participant info from PS """
 
-    response = requests.get('https://dashboard-api.psychedelicsurvey.com/v2/studies/{}/participants'.format(study.psId),
+    response = requests.get('https://dashboard-api.psychedelicsurvey.com/v2/studies/{}/participants'.format(study.id),
      headers={
         'ClientSecret': ps_secret,
         'ClientID': ps_key,

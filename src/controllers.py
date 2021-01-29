@@ -79,7 +79,7 @@ def sendNudges(db, isTest=False):
             continue
 
         comps    = db.Completion.select(lambda c: c.timepoint==tp).fetch()
-        user_ids = [comp.participant.psId for comp in comps if comp.isNudge() is True]
+        user_ids = [comp.participant.id for comp in comps if comp.isNudge() is True]
 
         if isTest:
             nudges.append((tp.study, tp.psId, user_ids))
@@ -87,7 +87,7 @@ def sendNudges(db, isTest=False):
 
         ps_call = requests.post(
             'https://dashboard-api.psychedelicsurvey.com/v2/studies/{}/timepoints/{}/send'.format(
-                tp.study.psId,
+                tp.study.id,
                 tp.psId,
                 ),
             json={

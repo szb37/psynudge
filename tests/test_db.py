@@ -33,28 +33,28 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(db.Participant.select().count()*2, db.Completion.select().count())
 
         # Check that Ids are correct
-        ps_ids = [part.psId for part in db.Participant.select().fetch()]
-        expected_ps_ids = ['001', '002', '003', '004', '005', '006', '007', '008', '009', '010']
-        for expected_ps_id in expected_ps_ids:
-            self.assertTrue(expected_ps_id in ps_ids)
+        p_ids = [p.id for p in db.Participant.select().fetch()]
+        expected_p_ids = ['001', '002', '003', '004', '005', '006', '007', '008', '009', '010']
+        for expected_p_id in expected_p_ids:
+            self.assertTrue(expected_p_id in p_ids)
 
         #{"key":"test7", "email":"test7@test.net", "date":"2020-01-10T00:00:00+02:00", "id":"008"},
-        test7p = db.Participant.select(lambda p: p.psId=='008').first()
+        test7p = db.Participant.select(lambda p: p.id=='008').first()
         self.assertEqual(test7p.whenStart, '2020-01-09T22:00:00+00:00')
         self.assertEqual(test7p.whenFinish, '2020-01-18T22:00:00+00:00')
 
         #{"key":"test5", "email":"test5@test.net", "date":"2020-01-10T00:00:00Z"     , "id":"005"},
-        test7p = db.Participant.select(lambda p: p.psId=='005').first()
+        test7p = db.Participant.select(lambda p: p.id=='005').first()
         self.assertEqual(test7p.whenStart, '2020-01-10T00:00:00+00:00')
         self.assertEqual(test7p.whenFinish, '2020-01-19T00:00:00+00:00')
 
         #{"key":"test6", "email":"test6@test.net", "date":"2020-01-10T00:00:00+00:00", "id":"006"},
-        test7p = db.Participant.select(lambda p: p.psId=='006').first()
+        test7p = db.Participant.select(lambda p: p.id=='006').first()
         self.assertEqual(test7p.whenStart, '2020-01-10T00:00:00+00:00')
         self.assertEqual(test7p.whenFinish, '2020-01-19T00:00:00+00:00')
 
         #{"key":"test1", "email":"test1@test.net", "date":"2020-01-10T00:00:00-04:00", "id":"001"},
-        test7p = db.Participant.select(lambda p: p.psId=='001').first()
+        test7p = db.Participant.select(lambda p: p.id=='001').first()
         self.assertEqual(test7p.whenStart, '2020-01-10T04:00:00+00:00')
         self.assertEqual(test7p.whenFinish, '2020-01-19T04:00:00+00:00')
 
@@ -87,28 +87,29 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(db.Participant.select().count()*2, db.Completion.select().count())
 
         # Check that Ids are correct
-        ps_ids = [part.psId for part in db.Participant.select().fetch()]
-        expected_ps_ids = ['001', '002', '003', '004', '005', '006', '007', '008', '009', '010']
-        for expected_ps_id in expected_ps_ids:
-            self.assertTrue(expected_ps_id in ps_ids)
+        p_ids = [p.id for p in db.Participant.select().fetch()]
+        expected_p_ids = ['001', '002', '003', '004', '005', '006', '007', '008', '009', '010']
+        #import pdb; pdb.set_trace()
+        for expected_p_id in expected_p_ids:
+            self.assertTrue(expected_p_id in p_ids)
 
         #{"key":"test7", "email":"test7@test.net", "date":"2020-01-10T00:00:00+02:00", "id":"008"},
-        test7p = db.Participant.select(lambda p: p.psId=='008').first()
+        test7p = db.Participant.select(lambda p: p.id=='008').first()
         self.assertEqual(test7p.whenStart, '2020-01-09T22:00:00+00:00')
         self.assertEqual(test7p.whenFinish, '2020-01-18T22:00:00+00:00')
 
         #{"key":"test5", "email":"test5@test.net", "date":"2020-01-10T00:00:00Z"     , "id":"005"},
-        test7p = db.Participant.select(lambda p: p.psId=='005').first()
+        test7p = db.Participant.select(lambda p: p.id=='005').first()
         self.assertEqual(test7p.whenStart, '2020-01-10T00:00:00+00:00')
         self.assertEqual(test7p.whenFinish, '2020-01-19T00:00:00+00:00')
 
         #{"key":"test6", "email":"test6@test.net", "date":"2020-01-10T00:00:00+00:00", "id":"006"},
-        test7p = db.Participant.select(lambda p: p.psId=='006').first()
+        test7p = db.Participant.select(lambda p: p.id=='006').first()
         self.assertEqual(test7p.whenStart, '2020-01-10T00:00:00+00:00')
         self.assertEqual(test7p.whenFinish, '2020-01-19T00:00:00+00:00')
 
         #{"key":"test1", "email":"test1@test.net", "date":"2020-01-10T00:00:00-04:00", "id":"001"},
-        test7p = db.Participant.select(lambda p: p.psId=='001').first()
+        test7p = db.Participant.select(lambda p: p.id=='001').first()
         self.assertEqual(test7p.whenStart, '2020-01-10T04:00:00+00:00')
         self.assertEqual(test7p.whenFinish, '2020-01-19T04:00:00+00:00')
 
@@ -127,25 +128,25 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(db.Participant.select().count()*2, db.Completion.select().count())
 
         # Check that Ids are correct
-        ps_ids = [part.psId for part in db.Participant.select().fetch()]
-        expected_ps_ids = ['001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011']
-        for expected_ps_id in expected_ps_ids:
-            self.assertTrue(expected_ps_id in ps_ids)
+        p_ids = [part.id for part in db.Participant.select().fetch()]
+        expected_p_ids = ['001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011']
+        for expected_p_id in expected_p_ids:
+            self.assertTrue(expected_p_id in p_ids)
 
         #{"key":"test1", "email":"test1@test.net", "date":"2020-01-10T00:00:00-04:00", "id":"001"},
-        test7p = db.Participant.select(lambda p: p.psId=='001').first()
+        test7p = db.Participant.select(lambda p: p.id=='001').first()
         self.assertEqual(test7p.whenStart, '2020-01-10T04:00:00+00:00')
         self.assertEqual(test7p.whenFinish, '2020-01-19T04:00:00+00:00')
 
         #{"key":"test11", "email":"test11@test.net", "date":"2020-01-10T00:00:00-05:00", "id":"011"}
-        test7p = db.Participant.select(lambda p: p.psId=='011').first()
+        test7p = db.Participant.select(lambda p: p.id=='011').first()
         self.assertEqual(test7p.whenStart, '2020-01-10T05:00:00+00:00')
         self.assertEqual(test7p.whenFinish, '2020-01-19T05:00:00+00:00')
 
         # Assume participant 011 updated start date
         tp = db.Timepoint.select(lambda tp: tp.name=='indep_tp1').first()
-        comp = db.Completion.select(lambda c: c.timepoint==tp and c.participant.psId=="011").first()
-        self.assertEqual(db.Participant.select(lambda p: p.psId=="011").first().whenStart, '2020-01-10T05:00:00+00:00')
+        comp = db.Completion.select(lambda c: c.timepoint==tp and c.participant.id=="011").first()
+        self.assertEqual(db.Participant.select(lambda p: p.id=="011").first().whenStart, '2020-01-10T05:00:00+00:00')
         self.assertEqual(comp.whenStartTp(), '2020-01-11T05:00:00+00:00')
 
         mock_ps2 = [
@@ -160,15 +161,9 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(db.Participant.select().count()*2, db.Completion.select().count())
 
         tp = db.Timepoint.select(lambda tp: tp.name=='indep_tp1').first()
-        comp = db.Completion.select(lambda c: c.timepoint==tp and c.participant.psId=="011").first()
-        self.assertEqual(db.Participant.select(lambda p: p.psId=="011").first().whenStart, '2020-01-22T05:00:00+00:00')
+        comp = db.Completion.select(lambda c: c.timepoint==tp and c.participant.id=="011").first()
+        self.assertEqual(db.Participant.select(lambda p: p.id=="011").first().whenStart, '2020-01-22T05:00:00+00:00')
         self.assertEqual(comp.whenStartTp(), '2020-01-23T05:00:00+00:00')
-
-
-
-
-
-
 
         db.rollback()
 
@@ -234,11 +229,11 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(db.Completion.select(lambda c: c.isComplete is True).count(), 1)
 
         self.assertFalse(
-            db.Completion.select(lambda c: c.participant.psId=='001' and c.timepoint==tp1).first().isComplete)
+            db.Completion.select(lambda c: c.participant.id=='001' and c.timepoint==tp1).first().isComplete)
         self.assertFalse(
-            db.Completion.select(lambda c: c.participant.psId=='002' and c.timepoint==tp1).first().isComplete)
+            db.Completion.select(lambda c: c.participant.id=='002' and c.timepoint==tp1).first().isComplete)
         self.assertTrue(
-            db.Completion.select(lambda c: c.participant.psId=='003' and c.timepoint==tp1).first().isComplete)
+            db.Completion.select(lambda c: c.participant.id=='003' and c.timepoint==tp1).first().isComplete)
 
         # Add completions for tp2
         tp2 = db.Timepoint.select(lambda tp: tp.name=='indep_tp2').first()
@@ -249,11 +244,11 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(db.Completion.select(lambda c: c.isComplete is True).count(), 2)
 
         self.assertFalse(
-            db.Completion.select(lambda c: c.participant.psId=='001' and c.timepoint==tp2).first().isComplete)
+            db.Completion.select(lambda c: c.participant.id=='001' and c.timepoint==tp2).first().isComplete)
         self.assertFalse(
-            db.Completion.select(lambda c: c.participant.psId=='002' and c.timepoint==tp2).first().isComplete)
+            db.Completion.select(lambda c: c.participant.id=='002' and c.timepoint==tp2).first().isComplete)
         self.assertTrue(
-            db.Completion.select(lambda c: c.participant.psId=='003' and c.timepoint==tp2).first().isComplete)
+            db.Completion.select(lambda c: c.participant.id=='003' and c.timepoint==tp2).first().isComplete)
 
         db.rollback()
 
@@ -290,26 +285,26 @@ class DatabaseTests(unittest.TestCase):
 
         # Check if completions are correct
         self.assertFalse(
-            db.Completion.select(lambda c: c.participant.psId=='001' and c.timepoint==stack_tp1).first().isComplete)
+            db.Completion.select(lambda c: c.participant.id=='001' and c.timepoint==stack_tp1).first().isComplete)
         self.assertFalse(
-            db.Completion.select(lambda c: c.participant.psId=='002' and c.timepoint==stack_tp1).first().isComplete)
+            db.Completion.select(lambda c: c.participant.id=='002' and c.timepoint==stack_tp1).first().isComplete)
         self.assertTrue(
-            db.Completion.select(lambda c: c.participant.psId=='003' and c.timepoint==stack_tp1).first().isComplete)
+            db.Completion.select(lambda c: c.participant.id=='003' and c.timepoint==stack_tp1).first().isComplete)
         self.assertFalse(
-            db.Completion.select(lambda c: c.participant.psId=='004' and c.timepoint==stack_tp1).first().isComplete)
+            db.Completion.select(lambda c: c.participant.id=='004' and c.timepoint==stack_tp1).first().isComplete)
         self.assertTrue(
-            db.Completion.select(lambda c: c.participant.psId=='005' and c.timepoint==stack_tp1).first().isComplete)
+            db.Completion.select(lambda c: c.participant.id=='005' and c.timepoint==stack_tp1).first().isComplete)
 
         self.assertFalse(
-            db.Completion.select(lambda c: c.participant.psId=='001' and c.timepoint==stack_tp2).first().isComplete)
+            db.Completion.select(lambda c: c.participant.id=='001' and c.timepoint==stack_tp2).first().isComplete)
         self.assertFalse(
-            db.Completion.select(lambda c: c.participant.psId=='002' and c.timepoint==stack_tp2).first().isComplete)
+            db.Completion.select(lambda c: c.participant.id=='002' and c.timepoint==stack_tp2).first().isComplete)
         self.assertTrue(
-            db.Completion.select(lambda c: c.participant.psId=='003' and c.timepoint==stack_tp2).first().isComplete)
+            db.Completion.select(lambda c: c.participant.id=='003' and c.timepoint==stack_tp2).first().isComplete)
         self.assertTrue(
-            db.Completion.select(lambda c: c.participant.psId=='004' and c.timepoint==stack_tp2).first().isComplete)
+            db.Completion.select(lambda c: c.participant.id=='004' and c.timepoint==stack_tp2).first().isComplete)
         self.assertFalse(
-            db.Completion.select(lambda c: c.participant.psId=='005' and c.timepoint==stack_tp2).first().isComplete)
+            db.Completion.select(lambda c: c.participant.id=='005' and c.timepoint==stack_tp2).first().isComplete)
 
         db.rollback()
 
