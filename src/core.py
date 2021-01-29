@@ -9,13 +9,11 @@ conda env create -f environment.yml
 
 from surveygizmo import SurveyGizmo
 from .tokens import sg_key, sg_secret, ps_key, ps_secret
-from .db import open_database
 from pony.orm import db_session, commit
-import datetime
+from .mylogger import psylog
 from .mydt import *
+import datetime
 import requests
-import logging
-import pytz
 import json
 import os
 
@@ -24,17 +22,6 @@ import os
 
 src_folder = os.path.dirname(os.path.abspath(__file__))
 base_dir   = os.path.abspath(os.path.join(src_folder, os.pardir))
-
-log_path = os.path.join(base_dir, "psynudge.log")
-logging.basicConfig(
-    level=logging.INFO,
-    filename=log_path,
-    datefmt='%Y-%m-%d - %H:%M:%S',
-    filemode='a',
-    format='%(asctime)s - %(levelname)s - %(message)s')
-nudgelog = logging.getLogger("nudgelog")
-nudgelog.info('Core imported.')
-
 
 """ Database functions """
 @db_session
@@ -50,21 +37,18 @@ def updateParticipant(db, study, ps_file_path=None, ps_data=None): #Tested
     if ps_file_path is None:
         assert isinstance(ps_data, list)
 
-    # Add new entries to DB
     for entry in ps_data:
 
-        # Check if participant exists
+        # Check if participant already exists.
+        # If it does and has same start date, then continue, update Participant otherwise
         id_match_ps = db.Participant.select(lambda p: p.id==entry['id']).fetch()
         assert len(id_match_ps) in [0,1]
 
-        # Get trial start date
         if ':' in str(entry['date']): # If ":" in string, then str is isoformat, if not, then unix seconds
             start_utc = iso2utcdt(entry['date'])
         else:
             start_utc = iso2utcdt(datetime.datetime.fromtimestamp(entry['date']).isoformat())
 
-        # Check if participant already exists.
-        # If it does and has same start date, then continue, update Participant otherwise
         if len(id_match_ps)==1:
             p = id_match_ps[0]
 
@@ -75,7 +59,6 @@ def updateParticipant(db, study, ps_file_path=None, ps_data=None): #Tested
 
         # Get trial end date
         maxTd = study.getFurthestTd()
-
         participant = db.Participant(
             id = entry['id'],
             study = study,
@@ -84,6 +67,7 @@ def updateParticipant(db, study, ps_file_path=None, ps_data=None): #Tested
 
         # Create completion entries for participant
         createCompletion(participant=participant, db=db)
+        psylog.info('Added/updated participant: {}'.format(entry['id']))
 
 @db_session
 def updateIsCompleteIndep(db, tp, alchemy_file_path=None, alchemy_data=None): #Tested
@@ -112,10 +96,12 @@ def updateIsCompleteIndep(db, tp, alchemy_file_path=None, alchemy_data=None): #T
             c.participant.id==id and
             c.timepoint==tp).fetch()
 
-        if len(completion)!=1: # TODO: why not assert?!?!?!?!
-            continue
+        #if len(completion)!=1: # TODO: why not assert?!?!?!?!
+        #    continue
 
+        assert len(completion) in [0,1]
         completion[0].isComplete = isComplete
+        psylog.info('Added completion; study:{}, tp:{}, id:{}'.format(tp.study.name, tp.name, id))
 
 @db_session
 def updateIsCompleteStack(db, study, alchemy_file_path=None, alchemy_data=None): #Tested
@@ -149,8 +135,10 @@ def updateIsCompleteStack(db, study, alchemy_file_path=None, alchemy_data=None):
 
             if len(completion)!=1:
                 continue
+            #assert len(completion) in [0,1]
 
             completion[0].isComplete = isComplete
+            psylog.info('Added completion; study:{}, tp:{}, id:{}'.format(study.name, tp.name, id))
 
 def assessIsComplete(response, tp): #Imp tested
     """ Decides whether timepoint is completed """
@@ -250,7 +238,7 @@ def getSgData(study, tp=None, getAll=False): #Imp tested
     if study.type.type=='indep':
         tp.lastSgCheck = utcNowStr
 
-    #nudgelog.info('SG data downloaded, study:{}, tp{}:.'.format(study.name, tp.name))
+    #psylog.info('SG data downloaded, study:{}, tp{}:.'.format(study.name, tp.name))
     return sg_data
 
 def getDataFilePath(study, tp=None, source=None, base_dir=base_dir): #Tested
@@ -321,4 +309,4 @@ def getResponseSguid(response): #Tested
 
 """ Cron run check """
 def scheduleTester():
-    nudgelog.info('Schedueler executed.')
+    psylog.info('Scheduele tester called')

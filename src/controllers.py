@@ -4,19 +4,21 @@
 :License: MIT
 """
 
+from .db import build_skeleton_database
 from .tokens import ps_key, ps_secret
-from .db import build_skeleton_database, open_database
-from .core import *
 from .mydt import getUtcNow
+from .mylogger import psylog, log_path
+from .core import *
 import requests
 import os
+
 
 src_folder = os.path.dirname(os.path.abspath(__file__))
 base_dir   = os.path.abspath(os.path.join(src_folder, os.pardir))
 
-
 def build_database(filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), delete_past=False):
 
+    psylog.info('Rebuild database')
     db = build_skeleton_database(filepath=filepath, create_db=True, mock_db=False)
     updatePsData2Db(db, save=False, delete_past=delete_past)
     updateSgData2Db(db, save=False, getAll=True)
@@ -25,6 +27,8 @@ def build_database(filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), delete
 @db_session
 def updatePsData2Db(db, save=True, delete_past=True):
     """ Downloads PS data and updates DB """
+
+    psylog.info('updatePsData2Db initalised')
 
     assert isinstance(save, bool)
 
@@ -42,9 +46,13 @@ def updatePsData2Db(db, save=True, delete_past=True):
         if delete_past is True:
             deletePastParticipant(db)
 
+    psylog.info('updatePsData2Db finished OK')
+
 @db_session
 def updateSgData2Db(db, save=True, getAll=False):
     """ Downloads SG data and updates DB """
+
+    psylog.info('updateSgData2Db initalised')
 
     assert isinstance(save, bool)
     assert isinstance(getAll, bool)
@@ -68,9 +76,13 @@ def updateSgData2Db(db, save=True, getAll=False):
                     filepath = getDataFilePath(study=study, tp=tp, source='sg')
                     saveData(ps_data, filepath)
 
+    psylog.info('updateSgData2Db finished OK')
+
 @db_session
 def sendNudges(db, isTest=False):
     """ For all tps, collects Completion with .isNudge=True and then calls PS to send reminder email """
+
+    psylog.info('sendNudges initalised')
 
     nudges=[]
     for tp in db.Timepoint.select().fetch():
@@ -84,6 +96,9 @@ def sendNudges(db, isTest=False):
         if isTest:
             nudges.append((tp.study, tp.psId, user_ids))
             continue
+
+        for id in user_ids:
+            psylog.info('Nudge is called; study:{}, tp:{}, Id:{}'.format(tp.study.id, tp.psId, id))
 
         ps_call = requests.post(
             'https://dashboard-api.psychedelicsurvey.com/v2/studies/{}/timepoints/{}/send'.format(
@@ -104,3 +119,5 @@ def sendNudges(db, isTest=False):
 
     if isTest:
         return nudges
+
+    psylog.info('sendNudges finished OK')
