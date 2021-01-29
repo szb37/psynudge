@@ -15,7 +15,7 @@ db = psynudge.db.build_empty_db(filepath=':memory:', create_db=True, mock_db=Tru
 
 class IntegrationTests(unittest.TestCase):
 
-    #@unittest.skip('wip')
+    @unittest.skip('wip')
     @db_session
     def test_build_db(self):
 
@@ -48,6 +48,7 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(db.Completion.select(lambda c: c.isComplete is True and c.timepoint==stack_tp1).count(), 1)
         self.assertEqual(db.Completion.select(lambda c: c.isComplete is True and c.timepoint==stack_tp2).count(), 1)
 
+    @unittest.skip('wip')
     @db_session
     @mock.patch.object(psynudge.src.db.Completion, 'isNudge')
     def test_sendNudges(self, mock):

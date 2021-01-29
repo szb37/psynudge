@@ -19,7 +19,6 @@ import pytz
 import json
 import os
 
-#TODO: what happens when user changes start date
 #TODO: db integrty: check that all TPs have the same lastSGCheck for stack studies
 #TODO: db integrty: check that all TPs have the same surveyId for stack studies
 #TODO: find better name for build_empty_db
@@ -56,18 +55,27 @@ def updateParticipant(db, study, ps_file_path=None, ps_data=None): #Tested
     for entry in ps_data:
 
         # Check if participant exists
-        psId_matches = db.Participant.select(lambda part: part.psId==entry['id']).fetch()
-        assert len(psId_matches) in [0,1]
-        if len(psId_matches)==1:
-            continue
+        id_match_ps = db.Participant.select(lambda part: part.psId==entry['id']).fetch()
+        assert len(id_match_ps) in [0,1]
 
-        # Get trial boundary dates
-        maxTd = study.getFurthestTd() #maximum timedelta
-
-        if ':' in str(entry['date']): # If : in string, then str is isoformat, if not, then unix seconds
+        # Get trial start date
+        if ':' in str(entry['date']): # If ":" in string, then str is isoformat, if not, then unix seconds
             start_utc = iso2utcdt(entry['date'])
         else:
             start_utc = iso2utcdt(datetime.datetime.fromtimestamp(entry['date']).isoformat())
+
+        # Check if participant already exists.
+        # If it does and has same start date, then continue, update Participant otherwise
+        if len(id_match_ps)==1:
+            p = id_match_ps[0]
+
+            if p.whenStart == start_utc:
+                continue
+            else:
+                p.delete()
+
+        # Get trial end date
+        maxTd = study.getFurthestTd()
 
         participant = db.Participant(
             psId = entry['id'],

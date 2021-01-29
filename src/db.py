@@ -116,13 +116,13 @@ class Completion(db.Entity):
     lastNudgeSend = Optional(str, default='2020-01-01T00:00:00+00:00') # in UTC
 
     def whenStartTp(self):
-        return iso2utcdt(self.participant.whenStart) + self.timepoint.td2start
+        return (iso2utcdt(self.participant.whenStart) + self.timepoint.td2start).isoformat()
 
     def whenEndTp(self):
-        return iso2utcdt(self.participant.whenStart) + self.timepoint.td2start + self.timepoint.td2end
+        return (iso2utcdt(self.participant.whenStart) + self.timepoint.td2start + self.timepoint.td2end).isoformat()
 
     def whenEndNudge(self):
-        return iso2utcdt(self.participant.whenStart) + self.timepoint.td2start + self.timepoint.td2end + self.td2nudge
+        return (iso2utcdt(self.participant.whenStart) + self.timepoint.td2start + self.timepoint.td2end + self.td2nudge).isoformat()
 
     def isAfterCompletion(self): # Tested
         """ Returns True if completion is expected, False if before / after time completion window """

@@ -142,6 +142,34 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(test7p.whenStart, '2020-01-10T05:00:00+00:00')
         self.assertEqual(test7p.whenFinish, '2020-01-19T05:00:00+00:00')
 
+        # Assume participant 011 updated start date
+        tp = db.Timepoint.select(lambda tp: tp.name=='indep_tp1').first()
+        comp = db.Completion.select(lambda c: c.timepoint==tp and c.participant.psId=="011").first()
+        self.assertEqual(db.Participant.select(lambda p: p.psId=="011").first().whenStart, '2020-01-10T05:00:00+00:00')
+        self.assertEqual(comp.whenStartTp(), '2020-01-11T05:00:00+00:00')
+
+        mock_ps2 = [
+            {"key":"test11", "email":"test11@test.net", "date":"2020-01-22T00:00:00-05:00", "id":"011"},]
+
+        psynudge.core.updateParticipant(
+            db = db,
+            ps_data = mock_ps2,
+            study = db.Study.select(lambda study: study.name=='indep_study').first())
+
+        self.assertEqual(db.Participant.select().count(), 11)
+        self.assertEqual(db.Participant.select().count()*2, db.Completion.select().count())
+
+        tp = db.Timepoint.select(lambda tp: tp.name=='indep_tp1').first()
+        comp = db.Completion.select(lambda c: c.timepoint==tp and c.participant.psId=="011").first()
+        self.assertEqual(db.Participant.select(lambda p: p.psId=="011").first().whenStart, '2020-01-22T05:00:00+00:00')
+        self.assertEqual(comp.whenStartTp(), '2020-01-23T05:00:00+00:00')
+
+
+
+
+
+
+
         db.rollback()
 
     @db_session
