@@ -9,7 +9,7 @@ conda env create -f environment.yml
 
 from surveygizmo import SurveyGizmo
 from .tokens import sg_key, sg_secret, ps_key, ps_secret
-from .db import get_db
+from .db import open_database
 from pony.orm import db_session, commit
 import datetime
 from .mydt import *
@@ -21,7 +21,6 @@ import os
 
 #TODO: db integrty: check that all TPs have the same lastSGCheck for stack studies
 #TODO: db integrty: check that all TPs have the same surveyId for stack studies
-#TODO: find better name for build_empty_db
 
 src_folder = os.path.dirname(os.path.abspath(__file__))
 base_dir   = os.path.abspath(os.path.join(src_folder, os.pardir))

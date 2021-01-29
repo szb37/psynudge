@@ -15,9 +15,9 @@ import pytz
 import json
 import os
 
-test_dir = os.path.dirname(os.path.abspath(__file__))
-db = psynudge.db.build_empty_db(filepath=':memory:', create_db=True, mock_db=True) # DB wo participant, just studys and timepoints
 
+test_dir = os.path.dirname(os.path.abspath(__file__))
+db = psynudge.db.build_skeleton_database(filepath=':memory:', create_db=True, mock_db=True) # DB wo participant, just studys and timepoints
 
 class DatabaseTests(unittest.TestCase):
 
@@ -309,8 +309,8 @@ class DatabaseTests(unittest.TestCase):
         db.rollback()
 
     @db_session
-    @mock.patch.object(psynudge.src.db.Completion, 'isNudgeTimely')
-    @mock.patch.object(psynudge.src.db.Completion, 'isBeforeNudgeEnd')
+    @mock.patch.object(db.Completion, 'isNudgeTimely')
+    @mock.patch.object(db.Completion, 'isBeforeNudgeEnd')
     def test_IsNudge(self, mockisNudgeTimely, mockisBeforeNudgeEnd):
 
         psynudge.core.updateParticipant(
@@ -442,7 +442,3 @@ class DatabaseTests(unittest.TestCase):
         self.assertTrue(completion.isNudgeTimely())
 
         db.rollback()
-
-    #@classmethod
-    #def tearDownClass(self, db=db):
-    #    del db

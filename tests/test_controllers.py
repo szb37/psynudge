@@ -10,16 +10,13 @@ from unittest import mock
 import psynudge
 import unittest
 
-db = psynudge.db.build_empty_db(filepath=':memory:', create_db=True, mock_db=True) # DB wo participant, just studys and timepoints
 
+db = psynudge.controllers.build_database(filepath=':memory:', delete_past=False)
 
 class IntegrationTests(unittest.TestCase):
 
-    @unittest.skip('wip')
     @db_session
-    def test_build_db(self):
-
-        db = psynudge.controllers.build_db(filepath=':memory:', delete_past=False)
+    def test_build_database(self, db=db):
 
         # Test updatePsData2Db jobs
         self.assertEqual(db.Study.select(lambda s: s.name=='indep_study').first().participants.select().count(), 2)
@@ -48,12 +45,9 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(db.Completion.select(lambda c: c.isComplete is True and c.timepoint==stack_tp1).count(), 1)
         self.assertEqual(db.Completion.select(lambda c: c.isComplete is True and c.timepoint==stack_tp2).count(), 1)
 
-    @unittest.skip('wip')
     @db_session
-    @mock.patch.object(psynudge.src.db.Completion, 'isNudge')
-    def test_sendNudges(self, mock):
-
-        db = psynudge.controllers.build_db(filepath=':memory:', delete_past=False)
+    @mock.patch.object(db.Completion, 'isNudge')
+    def test_sendNudges(self, mock, db=db):
 
         db.Study.select(lambda s: s.name=='indep_study').first().delete()
         stack_study = db.Study.select(lambda s: s.name=='stack_study').first()

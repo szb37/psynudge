@@ -15,7 +15,7 @@ import pytz
 import json
 import os
 
-db = psynudge.db.build_empty_db(filepath=':memory:', create_db=True, mock_db=True) # DB wo participant, just studys and timepoints
+db = psynudge.db.build_skeleton_database(filepath=':memory:', create_db=True, mock_db=True) # DB wo participant, just studys and timepoints
 
 class CoreTests(unittest.TestCase):
 

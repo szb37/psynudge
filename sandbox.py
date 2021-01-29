@@ -16,7 +16,7 @@
 
 """
 import psynudge
-db = psynudge.db.build_empty_db()
+db = psynudge.db.build_skeleton_database()
 psynudge.controllers.updatePsData2Db(db=db)
 
 https://survey.alchemer.eu/s3/90288073/indep-tp1
@@ -37,7 +37,7 @@ for entry in data['data']:
     )
 
 import psynudge
-db = psynudge.controllers.build_db(filepath=':memory:')
+db = psynudge.controllers.build_database(filepath=':memory:')
 
 db.Study.select(lambda s: s.name=='indep_study').first().participants.select().count()
 

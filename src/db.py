@@ -13,207 +13,39 @@ import os
 src_folder = os.path.dirname(os.path.abspath(__file__))
 base_dir   = os.path.abspath(os.path.join(src_folder, os.pardir))
 
-db = Database()
+def open_database(filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), create_db=False):
+    """ Returns existing database"""
 
-
-class Study(db.Entity):
-    id = PrimaryKey(str)
-    name = Optional(str)
-    participants = Set('Participant')
-    type = Required('StudyType')
-    timepoints = Set('Timepoint')
-    lastPsCheck = Required(str, default='2020-01-01T00:00:00+00:00') # in UTC
-    isActive    = Required(bool, default=True)
-
-    def areTpsConsistent(self):
-
-        if self.type=='stack':
-            if not len(set([tp.surveyId for tp in self.tps]))==1:
-                print('not all surveyIds are unique')
-                return False
-
-            if not all([isinstance(tp.lastQID, int) for tp in self.tps]):
-                print('not all lastQIDs are int')
-                return False
-
-            if not len(set([tp.lastQID for tp in self.tps]))==len(self.tps):
-                print('not all lastQIDs are unique')
-                return False
-
-            if not len(set([tp.startPageId for tp in self.tps]))==len(self.tps):
-                print('not all startPageIds are unique')
-                return False
-
-            return True
-
-        if self.type=='indep':
-
-            if not len(set([tp.surveyId for tp in self.tps]))==len(self.tps):
-                return False
-
-            if not all([tp.startPageId==1 for tp in self.tps]):
-                return False
-
-        return True
-
-    def getFurthestTp(self):
-        """ Returns timepoint with largest timedelta from start """
-
-        furthestTp = self.timepoints.select().first()
-        furthestTpTd = furthestTp.td2start + furthestTp.td2end + furthestTp.td2nudge
-
-        for tp in self.timepoints:
-            Td = tp.td2start + tp.td2end + tp.td2nudge
-
-            if Td > furthestTpTd:
-                furthestTp = tp
-                furthestTpTd = tp.td2start + tp.td2end + tp.td2nudge
-
-        return furthestTp
-
-    def getFurthestTd(self):
-        """ Returns largest timedelta from start """
-        tp = self.getFurthestTp()
-        return tp.td2start + tp.td2end + tp.td2nudge
-
-
-class StudyType(db.Entity):
-    type = PrimaryKey(str)
-    studys = Set(Study)
-
-
-class Timepoint(db.Entity):
-    id = PrimaryKey(int, auto=True)
-    psId = Required(int) # tp id on Psy Survey, same as offset, which may not be unique across studies
-    name = Optional(str)
-    study = Required(Study)
-    completions = Set('Completion')
-    lastSgCheck = Required(str, default='2020-01-01T00:00:00+00:00') # in UTC
-    surveyId = Required(int)
-    startPageId = Optional(int)
-    firstQID = Optional(int)
-    lastQID = Optional(int)
-    td2start = Required(datetime.timedelta)  #from user['date'] to start of TP: user['date'] + td2start = start of TP
-    td2end = Required(datetime.timedelta)    #from start of TP to end of TP: user['date'] + td2start + td2end = end of TP
-    td2nudge = Required(datetime.timedelta)  #from end of TP to the end of nudge window: user['date'] + td2start + td2end + td2nudge = end of nudge window
-
-
-class Participant(db.Entity):
-    id = PrimaryKey(str)
-    study = Required(Study)
-    completions = Set('Completion')
-    whenStart = Optional(str) # in UTC
-    whenFinish = Optional(str) # in UTC
-
-
-class Completion(db.Entity):
-    id = PrimaryKey(int, auto=True)
-    participant = Required(Participant)
-    timepoint = Required(Timepoint)
-    isComplete = Required(bool, default=False) # is the timepoint completed
-    lastNudgeSend = Optional(str, default='2020-01-01T00:00:00+00:00') # in UTC
-
-    def whenStartTp(self):
-        return (iso2utcdt(self.participant.whenStart) + self.timepoint.td2start).isoformat()
-
-    def whenEndTp(self):
-        return (iso2utcdt(self.participant.whenStart) + self.timepoint.td2start + self.timepoint.td2end).isoformat()
-
-    def whenEndNudge(self):
-        return (iso2utcdt(self.participant.whenStart) + self.timepoint.td2start + self.timepoint.td2end + self.td2nudge).isoformat()
-
-    def isAfterCompletion(self): # Tested
-        """ Returns True if completion is expected, False if before / after time completion window """
-
-        now = getUtcNow()
-        expStartDtUtc = iso2utcdt(self.participant.whenStart) # start of the experiment
-        startDtUtc = expStartDtUtc + self.timepoint.td2start  # start of the timepoint
-        finishDtUtc = startDtUtc + self.timepoint.td2end      # end of the tmepoint
-
-        if finishDtUtc <= now:
-            return True
-
-        return False
-
-    def isBeforeNudgeEnd(self): #Imp tested
-        """ Checks if now is within nudge time window of user and tp """
-
-        tp = self.timepoint
-        dtStartUTC = iso2utcdt(self.participant.whenStart)
-
-        start = dtStartUTC + (tp.td2start + tp.td2end)
-        end   = dtStartUTC + (tp.td2start + tp.td2end + tp.td2nudge)
-
-        return isWithinTimeWindow(start, end)
-
-    def isNudgeTimely(self): #Tested
-        """ Returns True if last nudge was sent > 23:50h ago, False otherwise """
-
-        dtNow = getUtcNow()
-        dtlastNudgeSend = iso2utcdt(self.lastNudgeSend)
-        assert dtNow > dtlastNudgeSend
-
-        if (dtNow - dtlastNudgeSend) > datetime.timedelta(days=0.985): # 0.985 instead of 1 for error tolerance ~23:38
-            return True
-
-        return False
-
-    def isNudge(self): #Tested
-        """ Returns True if
-            -(tp is witin nudge time window) and
-            -(tp has not been completed yet) and
-            -(last nudge was sent more then 24h ago),
-
-            False otherwise
-        """
-
-        # Check if completed already
-        if self.isComplete is True:
-            return False
-
-        # Check if we are within nudge time window
-        if self.isBeforeNudgeEnd() is False:
-            return False
-
-        # Check if last nudge was sent within 23.5 hours
-        if self.isNudgeTimely() is False:
-            return False
-
-        return True
-
-
-def get_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), create_db=False):
-    """ Returns existing sqlite database"""
-
+    db = Database()
+    define_db_entities(db)
     db.bind(provider='sqlite', filename=filepath, create_db=create_db)
     db.generate_mapping(create_tables=True)
     return db
 
-def build_empty_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), create_db=True, mock_db=False):
+# Skeleton Db only has the Study and Timpoint entitites setup without any actual user data from Alchemer/PS
+# To rebuild the database from scratch (including user data) use psynudge.controllers.build_database()
+def build_skeleton_database(filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), create_db=True, mock_db=False):
     """ Deletes old database (if exists) and returns newly built sqlite database"""
-
-    if db.provider is not None:
-        return db
 
     if os.path.isfile(filepath):
         os.remove(filepath)
 
-    db = get_db(filepath=filepath, create_db=create_db)
+    db = open_database(filepath=filepath, create_db=create_db)
 
     """ Define database entries for mock studies """
     with db_session:
 
         """ define study types """
-        indep_type = StudyType(type='indep')
-        stack_type = StudyType(type='stack')
+        indep_type = db.StudyType(type='indep')
+        stack_type = db.StudyType(type='stack')
 
         """ indep_mock_study """
-        indep_mock_study = Study(
+        indep_mock_study = db.Study(
             id='38130fdb-5c9e-11eb-ac63-0a280c4496dd',
             name='indep_study',
             type=indep_type,
         )
-        indep_tp1 = Timepoint(
+        indep_tp1 = db.Timepoint(
             psId=1,
             study = indep_mock_study,
             name = 'indep_tp1',
@@ -224,7 +56,7 @@ def build_empty_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'),
             td2end = datetime.timedelta(days=1),
             td2nudge = datetime.timedelta(days=1)
         )
-        indep_tp2 = Timepoint(
+        indep_tp2 = db.Timepoint(
             psId=6,
             study = indep_mock_study,
             name = 'indep_tp2',
@@ -238,12 +70,12 @@ def build_empty_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'),
         indep_mock_study.timepoints = [indep_tp1, indep_tp2]
 
         """ stack_mock_study """
-        stack_mock_study = Study(
+        stack_mock_study = db.Study(
             id='3f4241b2-5cbb-11eb-ac63-0a280c4496dd',
             name='stack_study',
             type='stack',
         )
-        stack_tp1 = Timepoint(
+        stack_tp1 = db.Timepoint(
             study = stack_mock_study,
             name = 'stack_tp1',
             psId=1,
@@ -255,7 +87,7 @@ def build_empty_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'),
             td2end = datetime.timedelta(days=1),
             td2nudge =datetime.timedelta(days=1)
         )
-        stack_tp2 = Timepoint(
+        stack_tp2 = db.Timepoint(
             study = stack_mock_study,
             name = 'stack_tp2',
             surveyId = 90286853,
@@ -277,3 +109,170 @@ def build_empty_db(db=db, filepath=os.path.join(base_dir, 'psynudge_db.sqlite'),
         pass
 
     return db
+
+def define_db_entities(db):
+
+    class Study(db.Entity):
+        id = PrimaryKey(str)
+        name = Optional(str)
+        participants = Set('Participant')
+        type = Required('StudyType')
+        timepoints = Set('Timepoint')
+        lastPsCheck = Required(str, default='2020-01-01T00:00:00+00:00') # in UTC
+        isActive    = Required(bool, default=True)
+
+        def areTpsConsistent(self):
+
+            if self.type=='stack':
+                if not len(set([tp.surveyId for tp in self.tps]))==1:
+                    print('not all surveyIds are unique')
+                    return False
+
+                if not all([isinstance(tp.lastQID, int) for tp in self.tps]):
+                    print('not all lastQIDs are int')
+                    return False
+
+                if not len(set([tp.lastQID for tp in self.tps]))==len(self.tps):
+                    print('not all lastQIDs are unique')
+                    return False
+
+                if not len(set([tp.startPageId for tp in self.tps]))==len(self.tps):
+                    print('not all startPageIds are unique')
+                    return False
+
+                return True
+
+            if self.type=='indep':
+
+                if not len(set([tp.surveyId for tp in self.tps]))==len(self.tps):
+                    return False
+
+                if not all([tp.startPageId==1 for tp in self.tps]):
+                    return False
+
+            return True
+
+        def getFurthestTp(self):
+            """ Returns timepoint with largest timedelta from start """
+
+            furthestTp = self.timepoints.select().first()
+            furthestTpTd = furthestTp.td2start + furthestTp.td2end + furthestTp.td2nudge
+
+            for tp in self.timepoints:
+                Td = tp.td2start + tp.td2end + tp.td2nudge
+
+                if Td > furthestTpTd:
+                    furthestTp = tp
+                    furthestTpTd = tp.td2start + tp.td2end + tp.td2nudge
+
+            return furthestTp
+
+        def getFurthestTd(self):
+            """ Returns largest timedelta from start """
+            tp = self.getFurthestTp()
+            return tp.td2start + tp.td2end + tp.td2nudge
+
+
+    class StudyType(db.Entity):
+        type = PrimaryKey(str)
+        studys = Set(Study)
+
+
+    class Timepoint(db.Entity):
+        id = PrimaryKey(int, auto=True)
+        psId = Required(int) # tp id on Psy Survey, same as offset, which may not be unique across studies
+        name = Optional(str)
+        study = Required(Study)
+        completions = Set('Completion')
+        lastSgCheck = Required(str, default='2020-01-01T00:00:00+00:00') # in UTC
+        surveyId = Required(int)
+        startPageId = Optional(int)
+        firstQID = Optional(int)
+        lastQID = Optional(int)
+        td2start = Required(datetime.timedelta)  #from user['date'] to start of TP: user['date'] + td2start = start of TP
+        td2end = Required(datetime.timedelta)    #from start of TP to end of TP: user['date'] + td2start + td2end = end of TP
+        td2nudge = Required(datetime.timedelta)  #from end of TP to the end of nudge window: user['date'] + td2start + td2end + td2nudge = end of nudge window
+
+
+    class Participant(db.Entity):
+        id = PrimaryKey(str)
+        study = Required(Study)
+        completions = Set('Completion')
+        whenStart = Optional(str) # in UTC
+        whenFinish = Optional(str) # in UTC
+
+
+    class Completion(db.Entity):
+        id = PrimaryKey(int, auto=True)
+        participant = Required(Participant)
+        timepoint = Required(Timepoint)
+        isComplete = Required(bool, default=False) # is the timepoint completed
+        lastNudgeSend = Optional(str, default='2020-01-01T00:00:00+00:00') # in UTC
+
+        def whenStartTp(self):
+            return (iso2utcdt(self.participant.whenStart) + self.timepoint.td2start).isoformat()
+
+        def whenEndTp(self):
+            return (iso2utcdt(self.participant.whenStart) + self.timepoint.td2start + self.timepoint.td2end).isoformat()
+
+        def whenEndNudge(self):
+            return (iso2utcdt(self.participant.whenStart) + self.timepoint.td2start + self.timepoint.td2end + self.td2nudge).isoformat()
+
+        def isAfterCompletion(self): # Tested
+            """ Returns True if completion is expected, False if before / after time completion window """
+
+            now = getUtcNow()
+            expStartDtUtc = iso2utcdt(self.participant.whenStart) # start of the experiment
+            startDtUtc = expStartDtUtc + self.timepoint.td2start  # start of the timepoint
+            finishDtUtc = startDtUtc + self.timepoint.td2end      # end of the tmepoint
+
+            if finishDtUtc <= now:
+                return True
+
+            return False
+
+        def isBeforeNudgeEnd(self): #Imp tested
+            """ Checks if now is within nudge time window of user and tp """
+
+            tp = self.timepoint
+            dtStartUTC = iso2utcdt(self.participant.whenStart)
+
+            start = dtStartUTC + (tp.td2start + tp.td2end)
+            end   = dtStartUTC + (tp.td2start + tp.td2end + tp.td2nudge)
+
+            return isWithinTimeWindow(start, end)
+
+        def isNudgeTimely(self): #Tested
+            """ Returns True if last nudge was sent > 23:50h ago, False otherwise """
+
+            dtNow = getUtcNow()
+            dtlastNudgeSend = iso2utcdt(self.lastNudgeSend)
+            assert dtNow > dtlastNudgeSend
+
+            if (dtNow - dtlastNudgeSend) > datetime.timedelta(days=0.985): # 0.985 instead of 1 for error tolerance ~23:38
+                return True
+
+            return False
+
+        def isNudge(self): #Tested
+            """ Returns True if
+                -(tp is witin nudge time window) and
+                -(tp has not been completed yet) and
+                -(last nudge was sent more then 24h ago),
+
+                False otherwise
+            """
+
+            # Check if completed already
+            if self.isComplete is True:
+                return False
+
+            # Check if we are within nudge time window
+            if self.isBeforeNudgeEnd() is False:
+                return False
+
+            # Check if last nudge was sent within 23.5 hours
+            if self.isNudgeTimely() is False:
+                return False
+
+            return True
