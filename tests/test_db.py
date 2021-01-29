@@ -419,3 +419,7 @@ class DatabaseTests(unittest.TestCase):
         self.assertTrue(completion.isNudgeTimely())
 
         db.rollback()
+
+    #@classmethod
+    #def tearDownClass(self, db=db):
+    #    del db

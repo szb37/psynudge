@@ -15,7 +15,7 @@ db = psynudge.db.build_empty_db(filepath=':memory:', create_db=True, mock_db=Tru
 
 class IntegrationTests(unittest.TestCase):
 
-    @unittest.skip('wip')
+    #@unittest.skip('wip')
     @db_session
     def test_build_db(self):
 
@@ -48,4 +48,19 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(db.Completion.select(lambda c: c.isComplete is True and c.timepoint==stack_tp1).count(), 1)
         self.assertEqual(db.Completion.select(lambda c: c.isComplete is True and c.timepoint==stack_tp2).count(), 1)
 
-        import pdb; pdb.set_trace()
+    @db_session
+    @mock.patch.object(psynudge.src.db.Completion, 'isNudge')
+    def test_sendNudges(self, mock):
+
+        db = psynudge.controllers.build_db(filepath=':memory:', delete_past=False)
+
+        db.Study.select(lambda s: s.name=='indep_study').first().delete()
+        stack_study = db.Study.select(lambda s: s.name=='stack_study').first()
+
+        mock.return_value = False
+        nudge_ids = psynudge.controllers.sendNudges(db=db, isTest=True)
+        self.assertEqual([(stack_study, 1, []) , (stack_study, 6, [])], nudge_ids)
+
+        mock.return_value = True
+        nudge_ids = psynudge.controllers.sendNudges(db=db, isTest=True)
+        self.assertEqual([(stack_study, 1, ['004', '005', 'bLZBHf69wmDVSbXh']) , (stack_study, 6, ['004', '005', 'bLZBHf69wmDVSbXh'])], nudge_ids)

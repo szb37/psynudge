@@ -22,8 +22,7 @@ import os
 #TODO: what happens when user changes start date
 #TODO: db integrty: check that all TPs have the same lastSGCheck for stack studies
 #TODO: db integrty: check that all TPs have the same surveyId for stack studies
-#TODO: lastPsCheck update in controller
-
+#TODO: find better name for build_empty_db
 
 src_folder = os.path.dirname(os.path.abspath(__file__))
 base_dir   = os.path.abspath(os.path.join(src_folder, os.pardir))

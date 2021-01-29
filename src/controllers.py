@@ -69,19 +69,21 @@ def updateSgData2Db(db, save=True, getAll=False):
                     saveData(ps_data, filepath)
 
 @db_session
-def sendNudges(db):
+def sendNudges(db, isTest=False):
     """ For all tps, collects Completion with .isNudge=True and then calls PS to send reminder email """
 
+    nudges=[]
     for tp in db.Timepoint.select().fetch():
 
         if tp.study.isActive is False:
             continue
 
-        nudge_comps = db.Completion.select(lambda c:
-            c.isNudge is True and
-            c.timepoint==tp).fetch()
+        comps    = db.Completion.select(lambda c: c.timepoint==tp).fetch()
+        user_ids = [comp.participant.psId for comp in comps if comp.isNudge() is True]
 
-        nudge_ids = [nudge_comp.participant.psId for nudge_comp in nudge_comps]
+        if isTest:
+            nudges.append((tp.study, tp.psId, user_ids))
+            continue
 
         ps_call = requests.post(
             'https://dashboard-api.psychedelicsurvey.com/v2/studies/{}/timepoints/{}/send'.format(
@@ -90,7 +92,7 @@ def sendNudges(db):
                 ),
             json={
                 "subject" : "Reminder to complete missed survey",
-                "participants" : nudge_ids,
+                "participants" : user_ids,
                 },
             headers={
                 'ClientSecret' : ps_secret,
@@ -99,3 +101,6 @@ def sendNudges(db):
             )
 
         assert ps_call.response_code==200
+
+    if isTest:
+        return nudges

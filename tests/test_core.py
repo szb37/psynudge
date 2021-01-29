@@ -17,7 +17,6 @@ import os
 
 db = psynudge.db.build_empty_db(filepath=':memory:', create_db=True, mock_db=True) # DB wo participant, just studys and timepoints
 
-
 class CoreTests(unittest.TestCase):
 
     def test_getResponseSguid(self):
@@ -181,3 +180,7 @@ class CoreTests(unittest.TestCase):
         tp.lastSgCheck = '2020-11-06T11:16:40+00:00'
         sg_json = psynudge.core.getSgData(study=indep_study, tp=tp)
         self.assertEqual(sg_json['total_count'], 0)
+
+    @classmethod
+    def tearDownClass(self, db=db):
+        del db

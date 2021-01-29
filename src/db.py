@@ -114,9 +114,15 @@ class Completion(db.Entity):
     timepoint = Required(Timepoint)
     isComplete = Required(bool, default=False) # is the timepoint completed
     lastNudgeSend = Optional(str, default='2020-01-01T00:00:00+00:00') # in UTC
-    #isNudge = Required(bool, default=False)
-    #isAfterCompletion = Required(bool, default=False) # should the timpoint be completed already
-    #isNudgeTimely = Required(bool, default=False) # did at least 23h past since last nudge
+
+    def whenStartTp(self):
+        return iso2utcdt(self.participant.whenStart) + self.timepoint.td2start
+
+    def whenEndTp(self):
+        return iso2utcdt(self.participant.whenStart) + self.timepoint.td2start + self.timepoint.td2end
+
+    def whenEndNudge(self):
+        return iso2utcdt(self.participant.whenStart) + self.timepoint.td2start + self.timepoint.td2end + self.td2nudge
 
     def isAfterCompletion(self): # Tested
         """ Returns True if completion is expected, False if before / after time completion window """
