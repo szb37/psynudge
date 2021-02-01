@@ -17,6 +17,7 @@ import requests
 import json
 import os
 
+
 #TODO: db integrty: check that all TPs have the same lastSGCheck for stack studies
 #TODO: db integrty: check that all TPs have the same surveyId for stack studies
 

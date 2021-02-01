@@ -4,6 +4,5 @@
 :License: MIT
 """
 
-from src import core
-
-core.scheduletester() # update psynudge.log 
+from src import controllers
+controllers.build_database()

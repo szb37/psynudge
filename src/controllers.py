@@ -16,12 +16,13 @@ import os
 src_folder = os.path.dirname(os.path.abspath(__file__))
 base_dir   = os.path.abspath(os.path.join(src_folder, os.pardir))
 
-def build_database(filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), delete_past=False):
+def build_database(filepath=os.path.join(base_dir, 'psynudge_db.sqlite'), delete_past=True):
 
     psylog.info('Rebuild database')
     db = build_skeleton_database(filepath=filepath, create_db=True, mock_db=False)
     updatePsData2Db(db, save=False, delete_past=delete_past)
     updateSgData2Db(db, save=False, getAll=True)
+    #assert False
     return db
 
 @db_session
