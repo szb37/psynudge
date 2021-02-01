@@ -10,6 +10,6 @@ Run every minute:
 
 Run every hour:
 0 * * * *   /home/balazs/anaconda3/envs/psynudge/bin/python /home/balazs/psynudge/run_rebuild_database.py
-
+*/5 * * * * /home/balazs/anaconda3/envs/psynudge/bin/python /home/balazs/psynudge/run_rebuild_database.py
 
 MAILTO="b.szigeti@pm.me" 0 */12 * * *  /home/balazs/anaconda3/envs/psynudge/bin/python /home/balazs/psynudge run_rebuild_database.py

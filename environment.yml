@@ -32,6 +32,7 @@ dependencies:
     - parso==0.7.1
     - pexpect==4.8.0
     - pickleshare==0.7.5
+    - pony==0.7.14
     - prompt-toolkit==3.0.7
     - ptyprocess==0.6.0
     - pygments==2.7.1
